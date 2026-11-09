@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { PlugZap, Trash2, Unplug, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { CopyCode } from "@/components/copy-code";
+import { DistReleases } from "@/components/dist-releases";
 import { SiteFrame } from "@/components/site-frame";
 import { TodayStamp } from "@/components/today-stamp";
 import { Button } from "@/components/ui/button";
@@ -323,6 +324,8 @@ function InstallScreen() {
               </div>
             </div>
           </div>
+
+          <DistReleases onLog={pushLog} />
 
           <div
             className={cn(

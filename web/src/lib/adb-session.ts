@@ -2,6 +2,18 @@ import type { Adb } from "@yume-chan/adb";
 import { ReadableStream } from "@yume-chan/stream-extra";
 
 let current: Adb | null = null;
+const connectionListeners = new Set<() => void>();
+
+function notifyConnection(): void {
+  for (const listener of connectionListeners) listener();
+}
+
+export function subscribeAdb(listener: () => void): () => void {
+  connectionListeners.add(listener);
+  return () => {
+    connectionListeners.delete(listener);
+  };
+}
 
 export type HeadunitInfo = {
   serial: string;
@@ -57,8 +69,12 @@ export async function connectHeadunit(): Promise<HeadunitInfo> {
   });
   const adb = new Adb(transport);
   current = adb;
+  notifyConnection();
   void adb.disconnected.then(() => {
-    if (current === adb) current = null;
+    if (current === adb) {
+      current = null;
+      notifyConnection();
+    }
   });
 
   const [model, android, build] = await Promise.all([
@@ -78,12 +94,39 @@ export async function connectHeadunit(): Promise<HeadunitInfo> {
 export async function disconnectHeadunit(): Promise<void> {
   const adb = current;
   current = null;
+  notifyConnection();
   if (adb) await adb.close();
 }
 
 export function requireAdb(): Adb {
   if (!current) throw new Error("الشاشة مو متصلة.");
   return current;
+}
+
+export function adbConnected(): boolean {
+  return current !== null;
+}
+
+export async function dumpPackage(pkg: string): Promise<string> {
+  if (!PKG.test(pkg)) throw new Error("اسم الحزمة غير صالح.");
+  const adb = requireAdb();
+  return adb.subprocess.noneProtocol.spawnWaitText(`dumpsys package ${pkg}`);
+}
+
+export async function runAllowlistedCommands(
+  commands: string[],
+  allow: (command: string) => boolean,
+): Promise<string[]> {
+  const adb = requireAdb();
+  const skipped: string[] = [];
+  for (const command of commands) {
+    if (!allow(command)) {
+      skipped.push(command);
+      continue;
+    }
+    await adb.subprocess.noneProtocol.spawnWaitText(command);
+  }
+  return skipped;
 }
 
 export async function installApk(file: File): Promise<void> {

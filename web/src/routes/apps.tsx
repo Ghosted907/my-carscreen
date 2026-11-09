@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
+import { DistReleases } from "@/components/dist-releases";
 import { SiteFrame } from "@/components/site-frame";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,9 @@ function AppsPage() {
           المصدر المكتوب على البطاقة، أو ترفع الملف أنت في التثبيت. كاميرا ٣٦٠ الوكالة
           ما تنزل من برا.
         </p>
+        <div className="mt-4">
+          <DistReleases />
+        </div>
         <div className="mt-4">
           <Button asChild variant="line">
             <Link to="/install" search={{ car: "jetour-t1" }}>
