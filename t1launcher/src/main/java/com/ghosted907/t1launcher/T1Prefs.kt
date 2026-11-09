@@ -2,7 +2,6 @@ package com.ghosted907.t1launcher
 
 import android.content.ComponentName
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Rect
 
 class T1Prefs(context: Context) {
@@ -77,38 +76,6 @@ class T1Prefs(context: Context) {
     }
 
     fun enabledSlots(): List<String> = slots.filter { slot(it) }
-
-    var compassEnabled: Boolean
-        get() = prefs.getBoolean("compassOn", true)
-        set(value) = prefs.edit().putBoolean("compassOn", value).apply()
-
-    var compassCx: Int
-        get() = prefs.getInt("compassCx", CompassGeometry.DEFAULT_CX)
-        set(value) = prefs.edit().putInt("compassCx", value).apply()
-
-    var compassCy: Int
-        get() = prefs.getInt("compassCy", CompassGeometry.DEFAULT_CY)
-        set(value) = prefs.edit().putInt("compassCy", value).apply()
-
-    var compassD: Int
-        get() = prefs.getInt("compassD", CompassGeometry.DEFAULT_D)
-        set(value) = prefs.edit().putInt("compassD", value).apply()
-
-    var compassRingPx: Int
-        get() = prefs.getInt("compassRing", 0)
-        set(value) = prefs.edit().putInt("compassRing", value).apply()
-
-    var compassRingColor: Int
-        get() = prefs.getInt("compassRingColor", 0xFFD4A84B.toInt())
-        set(value) = prefs.edit().putInt("compassRingColor", value).apply()
-
-    fun listen(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-    }
-
-    fun unlisten(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.unregisterOnSharedPreferenceChangeListener(listener)
-    }
 
     companion object {
         val slots = listOf("S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10")

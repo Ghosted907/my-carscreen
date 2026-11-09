@@ -17,26 +17,13 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 6, versionName 1.5.0. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 6, versionName 1.5.0. Nothing has been published yet, so the first release keeps this pair. The git tag follows this versionName (`v1.5.0`). After a release ships, the next launcher change increments versionCode by 1 and versionName. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 Release APKs are signed with a fixed release key that is not in git. Debug builds still use the local debug keystore and do not need that secret. Installing a release APK over a build that was signed with the debug key fails until that older package is uninstalled once:
 
 ```bash
 adb uninstall com.ghosted907.t1launcher
 ```
-
-## Compass photo
-
-A non-touch circle on display 1 covers the CLASSIC compass at 1556,384 (diameter 232). Pick a picture in Settings, or push one and start the overlay:
-
-```bash
-adb push t1_compass.png /sdcard/Download/t1_compass.png
-adb shell pm grant com.ghosted907.t1launcher android.permission.READ_EXTERNAL_STORAGE
-adb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow
-adb shell am start-foreground-service -n com.ghosted907.t1launcher/.ClusterOverlayService
-```
-
-The service also starts on boot and when T1 opens. It copies that file into app-private storage. No photo is stored in the APK. Logcat tag `T1Launcher`, line `compassOverlay shown cx=.. cy=.. d=..`.
 
 ## Cluster window
 

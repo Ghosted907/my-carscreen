@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
         overlayOk = Settings.canDrawOverlays(this)
         freeform = ClusterLaunch.freeformEnabled(this)
         EdgeSwipeService.sync(this)
-        ClusterOverlayService.sync(this)
     }
 
     private fun openOverlaySettings() {

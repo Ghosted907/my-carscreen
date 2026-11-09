@@ -4,7 +4,7 @@ This repository also contains the T1 launcher in `:t1launcher` (`com.ghosted907.
 
 ## Releases / الإصدارات
 
-One git tag `v*` builds both release APKs. The first tag is `v1.5.0`, matching the T1 launcher versionName. clusterdiag keeps its own versionName (`1.6.0` at that tag). GitHub Actions publishes `dist/apps.json` plus the APKs on the `dist` branch for https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/apps.json . The browser installer reads that file. Release assets may also be attached to the GitHub Release, but the site uses the raw URLs.
+One git tag `v*` builds both release APKs. The tag matches the T1 launcher versionName. Neither package has a GitHub release yet, so this first ship keeps the current numbers: `:t1launcher` versionName `1.5.0` / versionCode `6`, and `:app` (clusterdiag) versionName `1.6.0` / versionCode `7`. clusterdiag's versionName stays independent of the launcher, so the first tag is `v1.5.0` while clusterdiag remains `1.6.0`. After a package is published, the next change to that package increments its versionCode by 1 and its versionName. Do not bump a package that has never been released. GitHub Actions publishes `dist/apps.json` plus the APKs on the `dist` branch for https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/apps.json . The browser installer reads that file. Release assets may also be attached to the GitHub Release, but the site uses the raw URLs.
 
 Release signing uses repository secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`. Debug builds do not need them. The release key is not in git. Switching a package that was installed with the debug signature onto this release key needs one uninstall:
 

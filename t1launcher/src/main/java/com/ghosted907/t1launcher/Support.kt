@@ -154,7 +154,6 @@ class BootReceiver : android.content.BroadcastReceiver() {
         Log.i("T1Launcher", "boot received")
         EdgeSwipeService.watch = true
         EdgeSwipeService.sync(context)
-        ClusterOverlayService.sync(context)
     }
 }
 

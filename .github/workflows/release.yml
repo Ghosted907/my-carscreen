@@ -74,7 +74,6 @@ jobs:
                       "external": False,
                       "postInstall": [
                           "appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow",
-                          "pm grant com.ghosted907.t1launcher android.permission.READ_EXTERNAL_STORAGE",
                           "cmd notification allow_listener com.ghosted907.t1launcher/com.ghosted907.t1launcher.T1NotificationListener",
                           "settings put global enable_freeform_support 1",
                           "settings put global force_resizable_activities 1"
