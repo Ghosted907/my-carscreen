@@ -86,6 +86,7 @@ final class ClusterGaugeClient {
     private volatile IBinder car;
     private volatile IBinder cluster;
     private volatile boolean carOk;
+    private volatile boolean carSpeedValid;
     private volatile boolean clusterOk;
     private volatile boolean carChecked;
     private volatile boolean clusterChecked;
@@ -115,6 +116,7 @@ final class ClusterGaugeClient {
         public void onServiceDisconnected(ComponentName name) {
             car = null;
             carOk = false;
+            carSpeedValid = false;
             carChecked = false;
             listenersOn = false;
             log("IALCar gauge disconnected");
@@ -293,6 +295,8 @@ final class ClusterGaugeClient {
                 lastSnapAt = now;
                 log(GaugeFormat.gearSnap(lastGear));
             }
+        } else {
+            carSpeedValid = false;
         }
         IBinder ci = cluster;
         if (ci != null && !clusterChecked) {
@@ -326,8 +330,11 @@ final class ClusterGaugeClient {
         try {
             float value = getFloatProperty(binder, prop);
             synchronized (reading) {
-                if ("speed".equals(key) && GaugeFormat.validSpeed(value)) {
-                    reading.speed = value;
+                if ("speed".equals(key)) {
+                    carSpeedValid = GaugeFormat.validSpeed(value);
+                    if (carSpeedValid) {
+                        reading.speed = value;
+                    }
                 } else if ("rpm".equals(key) && GaugeFormat.validRpm(value)) {
                     reading.rpm = value;
                 } else if ("temp".equals(key)) {
@@ -338,6 +345,7 @@ final class ClusterGaugeClient {
         } catch (DeadObjectException e) {
             car = null;
             carOk = false;
+            carSpeedValid = false;
             listenersOn = false;
             log("IALCar dead during " + key);
         } catch (RemoteException e) {
@@ -363,6 +371,7 @@ final class ClusterGaugeClient {
         } catch (DeadObjectException e) {
             car = null;
             carOk = false;
+            carSpeedValid = false;
             listenersOn = false;
             log("IALCar dead during " + key);
         } catch (RemoteException e) {
@@ -385,6 +394,7 @@ final class ClusterGaugeClient {
         } catch (DeadObjectException e) {
             car = null;
             carOk = false;
+            carSpeedValid = false;
             carChecked = false;
             listenersOn = false;
             log("IALCar dead during gear " + prop);
@@ -407,6 +417,7 @@ final class ClusterGaugeClient {
         } catch (DeadObjectException e) {
             car = null;
             carOk = false;
+            carSpeedValid = false;
             carChecked = false;
             listenersOn = false;
             log("IALCar dead during probe " + prop);
@@ -425,9 +436,8 @@ final class ClusterGaugeClient {
                 reading.fuel = fuel;
                 reading.rangeKm = range;
                 reading.driveMode = mode;
-                if (!GaugeFormat.validSpeed(reading.speed) && GaugeFormat.validSpeed(speed)) {
-                    reading.speed = speed;
-                }
+                reading.speed = com.ghosted907.clusterdiag.logic.SpeedSource.choose(
+                        carSpeedValid, reading.speed, speed);
                 reading.debug.put("fuel 56", Integer.toString(fuel));
                 reading.debug.put("dte 57", Integer.toString(range));
                 reading.debug.put("mode 58", Integer.toString(mode));
@@ -608,6 +618,7 @@ final class ClusterGaugeClient {
             return;
         }
         synchronized (reading) {
+            carSpeedValid = true;
             reading.speed = value;
             reading.debug.put("speedListener", value + " valid=" + valid);
         }

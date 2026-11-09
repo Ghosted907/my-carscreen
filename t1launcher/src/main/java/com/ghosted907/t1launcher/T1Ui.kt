@@ -565,7 +565,6 @@ fun ClusterPage(
             Step("العدادات الأصلية") { onStock() }
             Text("ثيم ${snap.theme ?: "--"}  خط ${snap.font ?: "--"}", color = muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
-        CompassEditor(day, prefs, preview = true)
     }
 }
 
@@ -645,7 +644,7 @@ fun SettingsPage(
         Text("الإعدادات", color = text, fontSize = 28.sp)
         if (!overlayOk) {
             Text(
-                "سحب الحافة وصورة البوصلة يحتاجان صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",
+                "سحب الحافة يحتاج صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",
                 color = text,
                 fontSize = 15.sp,
                 modifier = Modifier
@@ -671,7 +670,6 @@ fun SettingsPage(
             SettingsChip("اليمين", edgeRight, { onRight(true) })
             SettingsChip("اليسار", !edgeRight, { onRight(false) })
         }
-        CompassEditor(day, prefs = (LocalContext.current.applicationContext as? T1App)?.prefs ?: T1Prefs(LocalContext.current), preview = false)
         Text(
             "الخدمة تبدأ مع الإقلاع ومع فتح T1. T1 لا يستبدل الشاشة الأصلية.",
             color = muted,
