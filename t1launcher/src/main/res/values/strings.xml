@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="touch_desc">T1 remote touch. On Android 11 gestures cannot target the cluster display.</string>
+</resources>

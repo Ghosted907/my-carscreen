@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#101418</color>
+    <color name="surface">#1B212B</color>
+    <color name="surface_2">#2A3342</color>
+    <color name="text">#F4F7FB</color>
+    <color name="text_dim">#A9B4C4</color>
+    <color name="amber">#F0B429</color>
+    <color name="on_amber">#1A1203</color>
+    <color name="digital">#3B78F0</color>
+    <color name="classic">#E2A51A</color>
+    <color name="navigation">#1E9D70</color>
+    <color name="on_color">#FFFFFF</color>
+    <color name="danger">#FF8A80</color>
+    <color name="danger_bg">#3A1C22</color>
+    <color name="ok">#7DDEA0</color>
+    <color name="dot_idle">#8B95A7</color>
+    <color name="stroke">#3C4758</color>
+</resources>

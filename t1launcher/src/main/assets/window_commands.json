@@ -1,0 +1,89 @@
+{
+  "action": "com.iflytek.autofly.handMessage",
+  "package": "com.autolink.voiceassistant",
+  "receiver": "com.autolink.voiceassistant.adapter.core.iflytek.IflytekMessageReceiver",
+  "extra": "value",
+  "note": "Outer object matches MessageInfo. content is a JSON string matching ContentDTO. Names and positions match VehicleController.setOpenWindow/setCloseWindow and Constants.Vehicle.",
+  "commands": {
+    "windows_all_open": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "open",
+        "semantic": {"slots": {"name": "car_window", "position": "all"}}
+      }
+    },
+    "windows_all_close": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "close",
+        "semantic": {"slots": {"name": "car_window", "position": "all"}}
+      }
+    },
+    "window_driver_open": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "open",
+        "semantic": {"slots": {"name": "car_window", "position": "main_driver"}}
+      }
+    },
+    "window_driver_close": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "close",
+        "semantic": {"slots": {"name": "car_window", "position": "main_driver"}}
+      }
+    },
+    "sunroof_open": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "open",
+        "semantic": {"slots": {"name": "sunroof"}}
+      }
+    },
+    "sunroof_close": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "close",
+        "semantic": {"slots": {"name": "sunroof"}}
+      }
+    },
+    "sunshade_open": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "open",
+        "semantic": {"slots": {"name": "sunshade"}}
+      }
+    },
+    "sunshade_close": {
+      "messageType": "REQUEST",
+      "focus": "carControl",
+      "position": "main_driver",
+      "content": {
+        "service": "carControl",
+        "operation": "close",
+        "semantic": {"slots": {"name": "sunshade"}}
+      }
+    }
+  }
+}
