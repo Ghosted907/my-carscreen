@@ -1,4 +1,5 @@
 name: pages
+# Source is GitHub Actions. A push of this file retriggers deploy.
 
 on:
   push:
