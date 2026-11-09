@@ -19,10 +19,20 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         run: |
+          set -euo pipefail
+          # ubuntu-latest already has cmdline-tools. setup-android@v3 fails because
+          # it still installs the removed SDK package "tools".
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if ! command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+            if [ -z "$sdkmanager_bin" ]; then
+              echo "sdkmanager not found under $ANDROID_HOME" >&2
+              exit 1
+            fi
+            export PATH="$(dirname "$sdkmanager_bin"):$PATH"
+          fi
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
