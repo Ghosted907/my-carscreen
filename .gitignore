@@ -7,6 +7,8 @@ local.properties
 .idea/
 captures/
 .DS_Store
+node_modules/
+web/dist/
 
 # Secrets and signing material. Never commit these.
 *.jks
