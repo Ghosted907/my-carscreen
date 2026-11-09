@@ -1,0 +1,176 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build signed release APKs
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :t1launcher:assembleRelease --stacktrace
+
+      - name: Write dist/apps.json and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 << 'PY'
+          import hashlib, json, os, pathlib, re
+          def gradle_version(path):
+              text = pathlib.Path(path).read_text()
+              code = int(re.search(r"versionCode\s*=\s*(\d+)", text).group(1))
+              name = re.search(r'versionName\s*=\s*"([^"]+)"', text).group(1)
+              return code, name
+          def apk_info(path):
+              data = pathlib.Path(path).read_bytes()
+              return hashlib.sha256(data).hexdigest(), len(data)
+          t1_code, t1_name = gradle_version("t1launcher/build.gradle.kts")
+          app_code, app_name = gradle_version("app/build.gradle.kts")
+          t1_apk = pathlib.Path("t1launcher/build/outputs/apk/release/t1launcher-release.apk")
+          app_apk = pathlib.Path("app/build/outputs/apk/release/app-release.apk")
+          if not t1_apk.is_file() or not app_apk.is_file():
+              raise SystemExit(f"missing apk: {t1_apk} {app_apk}")
+          t1_sha, t1_size = apk_info(t1_apk)
+          app_sha, app_size = apk_info(app_apk)
+          base = "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist"
+          manifest = {
+              "tag": os.environ.get("GITHUB_REF_NAME", ""),
+              "apps": [
+                  {
+                      "id": "t1launcher",
+                      "name": "T1",
+                      "package": "com.ghosted907.t1launcher",
+                      "versionCode": t1_code,
+                      "versionName": t1_name,
+                      "apk": f"{base}/t1launcher-release.apk",
+                      "sha256": t1_sha,
+                      "size": t1_size,
+                      "display": 0,
+                      "external": False,
+                      "postInstall": [
+                          "appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow",
+                          "pm grant com.ghosted907.t1launcher android.permission.READ_EXTERNAL_STORAGE",
+                          "cmd notification allow_listener com.ghosted907.t1launcher/com.ghosted907.t1launcher.T1NotificationListener",
+                          "settings put global enable_freeform_support 1",
+                          "settings put global force_resizable_activities 1"
+                      ],
+                      "notes": "Main display launcher. Freeform settings let apps open in a window on the cluster. Does not replace the OEM home and does not change system apps."
+                  },
+                  {
+                      "id": "clusterdiag",
+                      "name": "Cluster Diag",
+                      "package": "com.ghosted907.clusterdiag",
+                      "versionCode": app_code,
+                      "versionName": app_name,
+                      "apk": f"{base}/clusterdiag-release.apk",
+                      "sha256": app_sha,
+                      "size": app_size,
+                      "display": 0,
+                      "external": False,
+                      "postInstall": [],
+                      "notes": "Open the controls on the main screen. The gauge view is started on the cluster display from inside the app. Read-only vehicle signals. No vehicle writes and no system-app changes."
+                  },
+                  {
+                      "id": "revanced",
+                      "name": "YouTube ReVanced",
+                      "package": "app.revanced.android.youtube",
+                      "versionCode": None,
+                      "versionName": None,
+                      "apk": "https://revanced.app/",
+                      "sha256": None,
+                      "size": None,
+                      "display": None,
+                      "external": True,
+                      "postInstall": [],
+                      "notes": "Official ReVanced site only. This repo does not re-host the app."
+                  },
+                  {
+                      "id": "microg",
+                      "name": "microG",
+                      "package": "com.google.android.gms",
+                      "versionCode": None,
+                      "versionName": None,
+                      "apk": "https://microg.org/download.html",
+                      "sha256": None,
+                      "size": None,
+                      "display": None,
+                      "external": True,
+                      "postInstall": [],
+                      "notes": "Official microG download page only. This repo does not re-host the app."
+                  },
+                  {
+                      "id": "rustore",
+                      "name": "RuStore",
+                      "package": "ru.vk.store",
+                      "versionCode": None,
+                      "versionName": None,
+                      "apk": "https://www.rustore.ru/",
+                      "sha256": None,
+                      "size": None,
+                      "display": None,
+                      "external": True,
+                      "postInstall": [],
+                      "notes": "Official RuStore site only. This repo does not re-host the app."
+                  },
+                  {
+                      "id": "maps",
+                      "name": "Google Maps",
+                      "package": "com.google.android.apps.maps",
+                      "versionCode": None,
+                      "versionName": None,
+                      "apk": "https://play.google.com/store/apps/details?id=com.google.android.apps.maps",
+                      "sha256": None,
+                      "size": None,
+                      "display": None,
+                      "external": True,
+                      "postInstall": [],
+                      "notes": "Official Play Store listing only. This repo does not re-host the app."
+                  }
+              ]
+          }
+          out = pathlib.Path("dist-out")
+          out.mkdir()
+          (out / "apps.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          (out / "t1launcher-release.apk").write_bytes(t1_apk.read_bytes())
+          (out / "clusterdiag-release.apk").write_bytes(app_apk.read_bytes())
+          print((out / "apps.json").read_text())
+          PY
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          WORK=$(mktemp -d)
+          cp dist-out/apps.json dist-out/t1launcher-release.apk dist-out/clusterdiag-release.apk "$WORK/"
+          cd "$WORK"
+          git init -b dist
+          git add apps.json t1launcher-release.apk clusterdiag-release.apk
+          git commit -m "Publish ${GITHUB_REF_NAME} release"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dist
+          gh release create "${GITHUB_REF_NAME}" \
+            apps.json t1launcher-release.apk clusterdiag-release.apk \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Signed release. The browser installer reads https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/apps.json"

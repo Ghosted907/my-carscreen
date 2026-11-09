@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cluster Diag</string>
+    <string name="title">تشخيص ثيم العدادات</string>
+    <string name="title_en">Cluster theme diagnostic</string>
+    <string name="safety">أوامر جاهزة فقط. لا تفليش ولا استبدال لتطبيقات النظام.</string>
+    <string name="safety_en">Presets only. Does not flash or replace system apps.</string>
+    <string name="section_theme">ثيم العدادات · Cluster theme</string>
+    <string name="section_theme_note">شاهد لوحة العدادات. السجل يبيّن نتيجة الاتصال فقط.</string>
+    <string name="section_theme_note_en">Watch the physical cluster. The log only reports the binder call.</string>
+    <string name="section_more">إضافي · More</string>
+    <string name="section_more_note">الخط 1 أو 2. النهار 0 والليل 1. ليست ألوان RGB.</string>
+    <string name="section_more_note_en">Font is 1 or 2. Day is 0 and night is 1. No free RGB colors.</string>
+    <string name="current_theme">الثيم الحالي · Current theme</string>
+    <string name="theme_digital">رقمي\nDIGITAL</string>
+    <string name="theme_classic">كلاسيكي\nCLASSIC</string>
+    <string name="theme_nav">ملاحة\nNAVIGATION</string>
+    <string name="font_1">الخط 1\nFont 1</string>
+    <string name="font_2">الخط 2\nFont 2</string>
+    <string name="day">نهاري\nDay</string>
+    <string name="night">ليلي\nNight</string>
+    <string name="reread">إعادة القراءة\nRe-read</string>
+    <string name="retry_bind">إعادة الاتصال\nRetry connection</string>
+    <string name="log_title">السجل · Log</string>
+    <string name="log_empty">لا توجد أحداث بعد.\nNo events yet.</string>
+    <string name="theme_placeholder">—</string>
+    <string name="theme_unread_ar">لم تُقرأ بعد</string>
+    <string name="theme_unread_en">Not read yet</string>
+    <string name="status_connecting_ar">جارٍ الاتصال…</string>
+    <string name="status_connecting_en">Connecting…</string>
+    <string name="font_unknown">الخط · Font: —</string>
+    <string name="day_unknown">الوضع · Day/Night: —</string>
+    <string name="last_idle">بانتظار أمر\nWaiting for a command</string>
+    <string name="descriptor_unknown">—</string>
+    <string name="signals_title">قراءة فقط · Read only</string>
+    <string name="signals_left">Left turn</string>
+    <string name="signals_right">Right turn</string>
+    <string name="signals_hazard">Hazard</string>
+    <string name="signals_waiting">بانتظار إشارات الانعطاف\nWaiting for turn signals</string>
+    <string name="cluster_show">شغّل على العدادات\nShow on cluster</string>
+    <string name="cluster_preview">معاينة\nPreview</string>
+    <string name="cluster_close">إغلاق العداد\nClose cluster</string>
+</resources>

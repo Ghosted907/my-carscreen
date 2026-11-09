@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Optional so a phone can still install the APK and show the missing-service error. -->
+    <uses-feature
+        android:name="android.hardware.type.automotive"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <!-- API 30 package visibility: without this, bindService cannot see CiService. -->
+    <queries>
+        <package android:name="com.autolink.clusterinteraction" />
+        <package android:name="com.autolink.carservice" />
+        <package android:name="com.autolink.app.vehicleservice" />
+        <intent>
+            <action android:name="com.autolink.clusterinteraction.CiService" />
+        </intent>
+        <intent>
+            <action android:name="android.autolink.IAutoLinkCar" />
+        </intent>
+        <intent>
+            <action android:name="com.autolink.vehicleservice" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ClusterDiag">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="stateAlwaysHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <!-- Shown in an Android Automotive launcher if the head unit uses one. -->
+                <category android:name="android.intent.category.CAR_LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
+
+        <activity
+            android:name=".SaudiClusterActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.ClusterDiag.Cluster" />
+    </application>
+</manifest>
