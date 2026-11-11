@@ -10,7 +10,17 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.Executors
 
-class ClusterDeviceAdmin : DeviceAdminReceiver()
+/** Device admin used for device-owner hiding (port of NaviStart `DPups`). */
+class ClusterDeviceAdmin : DeviceAdminReceiver() {
+    override fun onEnabled(context: Context, intent: android.content.Intent) {
+        super.onEnabled(context, intent); JctStore.putBool(context, "DPups", true)
+        android.util.Log.e("DeviceAdmin", "Device Owner Enabled")
+    }
+    override fun onDisabled(context: Context, intent: android.content.Intent) {
+        super.onDisabled(context, intent); JctStore.putBool(context, "DPups", false)
+        android.util.Log.d("DeviceAdmin", "Device Owner Disabled")
+    }
+}
 
 object ClusterForceClose {
     // Deliberately no UI switch: enable in a later approved build, after informed owner setup.
@@ -31,7 +41,7 @@ object ClusterForceClose {
         val main = Handler(Looper.getMainLooper())
         worker.execute {
             val message = runCatching {
-                if (pkg !in ClusterLaunch.trackedPackages(app) || !allowed(app, pkg)) return@runCatching "الإغلاق محظور لهذه الحزمة لحماية النظام وتطبيقات السيارة"
+                if (pkg !in JctLaunch.trackedPackages(app) || !allowed(app, pkg)) return@runCatching "الإغلاق محظور لهذه الحزمة لحماية النظام وتطبيقات السيارة"
                 val dpm = app.getSystemService(DevicePolicyManager::class.java)
                 if (dpm == null || !dpm.isDeviceOwnerApp(app.packageName)) {
                     runCatching { app.getSystemService(ActivityManager::class.java)?.killBackgroundProcesses(pkg) }

@@ -85,9 +85,14 @@
             </intent-filter>
         </service>
 
+        <!-- NaviStart LounchB: single floating button + multi-button overlay. -->
         <service
-            android:name=".EdgeSwipeService"
-            android:exported="true" />
+            android:name=".JctLounchService"
+            android:exported="false" />
+        <!-- NaviStart boot service: auto-start task group / apps on displays. -->
+        <service
+            android:name=".JctBootService"
+            android:exported="false" />
 
         <service
             android:name=".T1TouchService"
@@ -110,7 +115,15 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
-        <!-- Declares capability only; never provisions device owner or activates admin. -->
+        <!-- NaviStart UserAppsHideCommandReceiver: restore hidden apps by broadcast. -->
+        <receiver
+            android:name=".UserAppsHideCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ghosted907.t1launcher.action.USER_APPS_HIDE_OPEN" />
+            </intent-filter>
+        </receiver>
+        <!-- NaviStart DPups equivalent. Device owner is only set manually: see README (adb shell dpm set-device-owner). -->
         <receiver android:name=".ClusterDeviceAdmin" android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data android:name="android.app.device_admin" android:resource="@xml/cluster_device_admin" />

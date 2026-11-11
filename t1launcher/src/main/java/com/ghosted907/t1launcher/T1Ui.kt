@@ -110,46 +110,15 @@ private fun DestChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 16.dp))
 }
 
-@Composable
-fun ClusterPlacementBar(
-    selected: ClusterPlacement.Spot,
-    armed: Boolean,
-    onSelect: (ClusterPlacement.Spot) -> Unit
-) {
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("موضع العدادات", color = T1Colors.nightMuted, fontSize = 13.sp, modifier = Modifier.padding(end = 4.dp))
-            ClusterPlacement.choices.forEach { spot ->
-                val on = if (armed) spot == selected else spot == ClusterPlacement.Spot.RIGHT
-                DestChip(spot.labelAr, on) { onSelect(spot) }
-            }
-        }
-        Text(
-            if (armed) "التطبيق التالي يفتح ${selected.labelAr} ويُحفظ له."
-            else "ضغطة واحدة تفتح الموضع المحفوظ. التطبيق الجديد يفتح يميناً.",
-            color = T1Colors.sand,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppsPage(
     day: Boolean,
     toCluster: Boolean,
-    placement: ClusterPlacement.Spot,
-    placementArmed: Boolean,
     apps: List<LaunchableApp>,
     pinned: Set<String>,
     recent: List<String>,
     onDestination: (Boolean) -> Unit,
-    onPlacement: (ClusterPlacement.Spot) -> Unit,
-    savedPlacement: (String) -> ClusterPlacement.Spot,
     onPin: (LaunchableApp) -> Unit,
     onLaunch: (LaunchableApp) -> Unit
 ) {
@@ -159,15 +128,14 @@ fun AppsPage(
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("كل التطبيقات", color = text, fontSize = 22.sp, modifier = Modifier.weight(1f))
-            DestChip("الشاشة", !toCluster) { onDestination(false) }
-            DestChip("العدادات", toCluster) { onDestination(true) }
+            DestChip("الجهاز اللوحي", !toCluster) { onDestination(false) }
+            DestChip("لوحة العدادات", toCluster) { onDestination(true) }
         }
         Text(
-            if (toCluster) "الوجهة: شاشة العدادات" else "الوجهة: الشاشة الرئيسية",
+            if (toCluster) "تشغيل على لوحة العدادات" else "تشغيل على الجهاز اللوحي",
             color = T1Colors.sand,
             fontSize = 13.sp
         )
-        if (toCluster) ClusterPlacementBar(placement, placementArmed, onPlacement)
         if (recentItems.isNotEmpty()) {
             Text("المستخدمة مؤخراً", color = text, fontSize = 16.sp, modifier = Modifier.padding(top = 12.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
@@ -193,7 +161,6 @@ fun AppsPage(
                     Spacer(Modifier.height(8.dp))
                     Text(app.label, color = text, fontSize = 14.sp, maxLines = 2, textAlign = TextAlign.Center)
                     if (app.packageName in pinned) Text("★ المفضلة", color = T1Colors.gold, fontSize = 11.sp)
-                    if (toCluster) Text(savedPlacement(app.packageName).labelAr, color = T1Colors.sand, fontSize = 11.sp)
                 }
             }
             item {
@@ -210,108 +177,22 @@ fun AppsPage(
 fun ClusterPage(
     day: Boolean,
     snap: CarBridge.Snap,
-    prefs: T1Prefs,
-    freeform: Boolean,
     onApplyClassic: () -> Unit,
     onHide: () -> Unit,
     onStock: () -> Unit,
-    onLaunchSample: () -> Unit,
-    onApply: () -> Unit,
-    onClear: () -> Unit,
-    onSpot: (ClusterPlacement.Spot) -> Unit
+    onClear: () -> Unit
 ) {
-    var x by remember { mutableIntStateOf(prefs.clusterX) }
-    var y by remember { mutableIntStateOf(prefs.clusterY) }
-    var w by remember { mutableIntStateOf(prefs.clusterW) }
-    var h by remember { mutableIntStateOf(prefs.clusterH) }
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
-    fun save(nx: Int, ny: Int, nw: Int, nh: Int) {
-        val box = ClusterPresets.custom(nx, ny, nw, nh)
-        x = box.left
-        y = box.top
-        w = box.width
-        h = box.height
-        prefs.clusterX = x
-        prefs.clusterY = y
-        prefs.clusterW = w
-        prefs.clusterH = h
-    }
-    fun preset(box: ClusterPresets.Box, spot: ClusterPlacement.Spot) {
-        save(box.left, box.top, box.width, box.height)
-        onSpot(spot)
-        onApply()
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text("مساحة تطبيقك على العدادات", color = text, fontSize = 26.sp)
-        Text("القياس بنقاط 1920×720. تطبيق يعيد النافذة الحرة على شاشة العدادات.", color = muted, fontSize = 13.sp)
-        if (!freeform) {
-            Text(
-                "الوضع الحر غير مفعّل، فالقياس يُتجاهل والتطبيق يفتح ملء الشاشة.\n${ClusterLaunch.FREEFORM_COMMANDS}\nثم أعد تشغيل السيارة.",
-                color = Color(0xFF123827),
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 8.dp).fillMaxWidth().background(T1Colors.goldSoft, RoundedCornerShape(12.dp)).padding(12.dp)
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.height(220.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1.4f).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(Color(0xFF071B14)).padding(12.dp)) {
-                Text("DISPLAY  ·  ${Displays.clusterId(LocalContext.current)?.toString() ?: "1"}", color = muted, fontSize = 12.sp)
-                BoxWithConstraints(Modifier.fillMaxSize().padding(top = 8.dp).border(1.dp, T1Colors.nightLine, RoundedCornerShape(16.dp))) {
-                    val left = maxWidth * (x / 1920f)
-                    val top = maxHeight * (y / 720f)
-                    val boxW = maxWidth * (w / 1920f)
-                    val boxH = maxHeight * (h / 720f)
-                    Box(
-                        Modifier.offset(left, top).size(boxW, boxH).background(Color(0x6638C8C8), RoundedCornerShape(6.dp))
-                    )
-                    Text("$x $y  ${x + w} ${y + h}", color = T1Colors.cyanSoft, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp))
-                }
-            }
-            Column(Modifier.weight(1f)) {
-                Text("الموضع $x,$y    القياس ${w}×${h}", color = text)
-                Row {
-                    Step("- س") { save(x - 40, y, w, h) }
-                    Step("+ س") { save(x + 40, y, w, h) }
-                    Step("- ص") { save(x, y - 40, w, h) }
-                    Step("+ ص") { save(x, y + 40, w, h) }
-                }
-                Row {
-                    Step("- عرض") { save(x, y, w - 40, h) }
-                    Step("+ عرض") { save(x, y, w + 40, h) }
-                    Step("- ارتفاع") { save(x, y, w, h - 40) }
-                    Step("+ ارتفاع") { save(x, y, w, h + 40) }
-                }
-                Text(
-                    if (prefs.clusterPackage.isBlank()) "لم يُفتح تطبيق على العدادات بعد." else "على العدادات: ${prefs.clusterPackage}",
-                    color = muted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState())
-        ) {
-            Step("يمين") { preset(ClusterPresets.rightSide(), ClusterPlacement.Spot.RIGHT) }
-            Step("يسار") { preset(ClusterPresets.leftSide(), ClusterPlacement.Spot.LEFT) }
-            Step("وسط") { preset(ClusterPresets.center(), ClusterPlacement.Spot.CENTER) }
-            Step("ملء الشاشة") { preset(ClusterPresets.full(), ClusterPlacement.Spot.FULL) }
-            Step("كامل") { preset(ClusterPresets.full(), ClusterPlacement.Spot.FULL) }
-            Step("نصف أيسر") { preset(ClusterPresets.leftHalf(), ClusterPlacement.Spot.CUSTOM) }
-            Step("نصف أيمن") { preset(ClusterPresets.rightHalf(), ClusterPlacement.Spot.CUSTOM) }
-            Step("مخصص") { save(x, y, w, h); onSpot(ClusterPlacement.Spot.CUSTOM) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            Step("تطبيق") { onApply() }
-            Step("نقل أو إغلاق تطبيقات العدادات") { onClear() }
-            Step("فتح Waze على العدادات") { onLaunchSample() }
-        }
+        Text("العدادات", color = text, fontSize = 26.sp)
+        Text("تشغيل التطبيق على لوحة العدادات بطريقة JCarTools: setLaunchDisplayId على فهرس الشاشة، بدون نافذة حرة.", color = muted, fontSize = 13.sp)
+        JctClusterAppCard(day)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             Step("كلاسيكي") { onApplyClassic() }
             Step("إخفاء الإضافات") { onHide() }
             Step("العدادات الأصلية") { onStock() }
+            Step("إغلاق تطبيق العدادات") { onClear() }
             Text("ثيم ${snap.theme ?: "--"}  خط ${snap.font ?: "--"}", color = muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
     }
@@ -340,14 +221,8 @@ fun WindowsPage(day: Boolean, onBack: () -> Unit) {
 @Composable
 fun SettingsPage(
     day: Boolean,
-    edgeOn: Boolean,
-    edgeRight: Boolean,
-    edgeTab: Boolean,
     overlayOk: Boolean,
     onDay: () -> Unit,
-    onEdge: (Boolean) -> Unit,
-    onRight: (Boolean) -> Unit,
-    onTab: (Boolean) -> Unit,
     onOverlaySettings: () -> Unit,
     onRecheck: () -> Unit,
     onButtons: () -> Unit
@@ -357,10 +232,10 @@ fun SettingsPage(
     val line = if (day) T1Colors.dayLine else T1Colors.nightLine
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
         Text("الإعدادات", color = text, fontSize = 28.sp)
-        SettingsChip("الأزرار · العدد والتطبيق والموضع", true, onButtons)
+        SettingsChip("تشغيل التطبيقات · الأزرار العائمة · مناطق الحافة · إخفاء التطبيقات", true, onButtons)
         if (!overlayOk) {
             Text(
-                "سحب الحافة والزر الجانبي يحتاجان صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",
+                "الأزرار العائمة ومربع الاستعادة تحتاج صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",
                 color = text,
                 fontSize = 15.sp,
                 modifier = Modifier
@@ -374,26 +249,6 @@ fun SettingsPage(
                 SettingsChip("فتح إعدادات الظهور", true, onOverlaySettings)
                 SettingsChip("تحقّق", false, onRecheck)
             }
-        }
-        Text("سحب الحافة", color = text, fontSize = 18.sp, modifier = Modifier.padding(top = 18.dp))
-        Text(
-            if (edgeOn) "مفعّل. اسحب من حافة الشاشة نحو الوسط لفتح T1 فوق أي تطبيق." else "متوقف. الحافة لا تعترض اللمس.",
-            color = muted,
-            fontSize = 14.sp
-        )
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SettingsChip(if (edgeOn) "مفعّل" else "متوقف", edgeOn, { onEdge(!edgeOn) })
-            SettingsChip("اليمين", edgeRight, { onRight(true) })
-            SettingsChip("اليسار", !edgeRight, { onRight(false) })
-        }
-        Text("زر فتح اللانشر الجانبي", color = text, fontSize = 18.sp, modifier = Modifier.padding(top = 18.dp))
-        Text(
-            if (edgeTab) "ظاهر على يمين الشاشة الرئيسية. ضغطة واحدة تفتح T1 عندما تكون في الخلفية." else "مخفي. سحب الحافة يبقى كما هو.",
-            color = muted,
-            fontSize = 14.sp
-        )
-        Row(Modifier.padding(top = 8.dp)) {
-            SettingsChip(if (edgeTab) "مفعّل" else "متوقف", edgeTab, { onTab(!edgeTab) })
         }
         Text(
             "الخدمة تبدأ مع الإقلاع ومع فتح T1. T1 لا يستبدل الشاشة الأصلية.",

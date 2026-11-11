@@ -15,6 +15,10 @@ internal object HomeAppWindows {
     private const val FREEFORM = 5
     private const val FULLSCREEN = 1
 
+    fun freeformEnabled(context: Context): Boolean = runCatching {
+        android.provider.Settings.Global.getInt(context.contentResolver, "enable_freeform_support", 0) == 1
+    }.getOrDefault(false)
+
     fun dock(context: Context, component: ComponentName, bounds: Rect) {
         require(bounds.width() >= 220 && bounds.height() >= 220) { "نافذة التطبيق صغيرة جداً" }
         start(context, component, FREEFORM, bounds)

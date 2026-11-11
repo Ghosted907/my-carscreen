@@ -4,10 +4,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ClusterMovePolicyTest {
-    @Test fun reuseFlagsAreExact() { assertEquals(0x10220000, ClusterMovePolicy.REUSE_FLAGS) }
-    @Test fun destructiveAndMultipleFlagsAbsent() {
-        assertEquals(0, ClusterMovePolicy.REUSE_FLAGS and (0x08000000 or 0x00008000 or 0x04000000))
-    }
     @Test fun mainUsesIdNotPosition() {
         assertEquals(0, ClusterMovePolicy.main(listOf(ClusterMovePolicy.Panel(7,1920,720), ClusterMovePolicy.Panel(0,1920,1080))))
     }

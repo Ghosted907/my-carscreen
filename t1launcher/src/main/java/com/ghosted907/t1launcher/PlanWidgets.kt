@@ -47,9 +47,8 @@ fun MediaLaunchPanel(day: Boolean) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         listOf("Waze · ويز" to "com.waze", "YouTube · يوتيوب" to "app.revanced.android.youtube").forEach { (name, pkg) ->
             Column(Modifier.weight(1f).height(160.dp).background(tile(day), RoundedCornerShape(20.dp)).clickable {
-                val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-                if (intent == null) Toast.makeText(context, "$name غير مثبت", Toast.LENGTH_SHORT).show()
-                else runCatching { LauncherDisplay.start(context, intent) }.onFailure { Toast.makeText(context, "تعذر فتح $name", Toast.LENGTH_SHORT).show() }
+                if (!JctLaunch.startOnDisplayIndex(context, pkg, JctLaunch.guIndex(context)))
+                    Toast.makeText(context, "تعذر فتح $name", Toast.LENGTH_SHORT).show()
             }.padding(22.dp), verticalArrangement = Arrangement.Center) {
                 Text(if (pkg == "com.waze") "◇" else "▷", color = Gold, fontSize = 35.sp)
                 Text(name, color = tone(day), fontSize = 24.sp)

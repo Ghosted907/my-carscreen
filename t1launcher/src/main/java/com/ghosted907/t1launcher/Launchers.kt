@@ -121,20 +121,6 @@ object AppIndex {
     fun find(all: List<LaunchableApp>, vararg packages: String): LaunchableApp? =
         packages.firstNotNullOfOrNull { pkg -> all.firstOrNull { it.packageName == pkg } }
 
-    fun launch(context: Context, app: LaunchableApp, onCluster: Boolean, bounds: Rect?) {
-        if (!onCluster) {
-            ClusterLaunch.moveToMain(context, app.component)
-            return
-        }
-        val rect = if (bounds != null && bounds.width() > 0 && bounds.height() > 0) {
-            bounds
-        } else {
-            val right = ClusterPresets.rightSide()
-            Rect(right.left, right.top, right.right, right.bottom)
-        }
-        ClusterLaunch.launch(context, app.component, rect)
-    }
-
     fun openInstaller(context: Context) {
         val intent = Intent(Intent.ACTION_VIEW).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val pm = context.packageManager

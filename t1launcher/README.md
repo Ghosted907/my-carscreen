@@ -15,7 +15,7 @@ is enabled. Tapping a card header expands that task to fullscreen; bringing T1 t
 the task to its card where the device permits task reuse. The original home car artwork and live
 driving readings remain below. Long-press an app to pin it ahead of the default shortcuts;
 the Apps page also shows recently launched apps. Apps can open on the main screen or cluster, and
-the edge gesture, configurable quick buttons, and saved cluster placement remain available.
+app launch, floating buttons, edge zones and app hiding follow JCarTools/NaviStart 1.4.1 (see below).
 All 99 structured readings and the searchable OEM SDK catalogue
 remain under **بيانات السيارة**. Window, roof, and OEM settings controls are under **التحكم**.
 See [TELEMETRY.md](TELEMETRY.md) for coverage, raw-value semantics, and validation.
@@ -57,31 +57,41 @@ Release APKs are signed with a fixed release key that is not in git. Debug build
 adb uninstall com.ghosted907.t1launcher
 ```
 
-## Cluster window
+## JCarTools (NaviStart 1.4.1) port
 
-Apps sent to the cluster launch on display 1 in freeform (`setLaunchWindowingMode(5)` plus the bundle key `android.activity.windowingMode`) with `setLaunchBounds` in 1920×720 pixels. Flags are `NEW_TASK | MULTIPLE_TASK | CLEAR_TASK`. Apply resizes the running task when the system allows it, and otherwise relaunches it at the new rectangle. Presets: full, center (`560 80 1360 640`), left half, right half, and custom. **أزل التطبيق من العدادات** sends that app back to display 0.
+Since 1.9.0 the launcher's own launch path, configurable edge buttons, cluster placement presets and the
+20px edge strip are gone (sources kept in `t1launcher/removed-by-jcartools-port/`). They are replaced by
+NaviStart's methods, ported 1:1:
 
-Freeform has to be enabled once:
+* **Launch on a display**: `getLaunchIntentForPackage(pkg)` + `FLAG_ACTIVITY_NEW_TASK` +
+  `ActivityOptions.makeBasic().setLaunchDisplayId(displays[d])`, where `displays` is
+  `DisplayManager.getDisplays()` and `d` is the head-unit index (`gu_display_index`, default 0) or the
+  cluster index (`pri_display_index`, default 1). No freeform, no bounds. `JctLaunch.kt`.
+* **Buttons**: the single floating button and the 6/8-slot multi-button (`JctLounchService`), each slot
+  an action string: `app:<pkg>`, `enum:<ACTION>`, `split:<pkg>|<pkg>`, `task:<group>`. Task groups run
+  their steps in order and can auto-start at boot (`JctBootService`). Settings → تشغيل التطبيقات.
+* **Edge zones**: six zones (left top/bottom, right top/bottom, bottom left/right), 32dp thick,
+  `TYPE_ACCESSIBILITY_OVERLAY` (2032) windows from the accessibility service `T1TouchService`.
+  A drag longer than 90px (capped at 500px) runs the zone's action. Enable T1 remote touch in
+  Accessibility settings.
+* **App hiding**: unprivileged mode disables the launcher's own shortcut components with
+  `setComponentEnabledSetting`. Full hiding uses `DevicePolicyManager.setApplicationHidden`, which only
+  works when T1 is device owner. Restore: 14 taps on the transparent recovery square, or
+  `adb shell am broadcast -a com.ghosted907.t1launcher.action.USER_APPS_HIDE_OPEN -n com.ghosted907.t1launcher/.UserAppsHideCommandReceiver`.
+
+Device owner is never set by the app. It is a one-time manual step, only possible when the device has
+no accounts, and it is hard to undo (the app must clear it itself or the device must be reset).
+Do not run it on the car unless you accept that:
 
 ```bash
-adb shell settings put global enable_freeform_support 1
-adb shell settings put global force_resizable_activities 1
+adb shell dpm set-device-owner com.ghosted907.t1launcher/.ClusterDeviceAdmin
 ```
 
-Reboot after those. The editor shows the same commands when `enable_freeform_support` is not 1. The small caption bar is drawn by the system on the other app's window.
-
-## Edge swipe
-
-A foreground service draws a 20px transparent strip on the physical right edge of display 0 (left is optional in Settings). It sits below the status bar and stops about 100px above the bottom of a 1080px-tall screen, clear of the HVAC dock. A mostly horizontal drag toward the center, longer than 80px, brings `MainActivity` forward with `FLAG_ACTIVITY_NEW_TASK|FLAG_ACTIVITY_REORDER_TO_FRONT`. Taps are not treated as a swipe. The strip is hidden while T1 is in front. Logcat tag `T1Launcher`, line `edgeSwipe open`.
-
-The service starts on `BOOT_COMPLETED` and whenever T1 opens. It needs the overlay app-op:
+The floating buttons and recovery square need the overlay app-op:
 
 ```bash
 adb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow
-adb shell am start-foreground-service -n com.ghosted907.t1launcher/.EdgeSwipeService
 ```
-
-Settings shows the same grant command when the permission is missing, and has the on/off switch and the edge side.
 
 ## Windows, sunroof, sunshade
 

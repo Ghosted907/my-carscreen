@@ -38,25 +38,21 @@ class T1App : android.app.Application() {
         prefs = T1Prefs(this)
         car = CarBridge(this)
         car.start()
-        // Process start is enough. Permission may already be granted while no activity is open.
-        EdgeSwipeService.arm(this)
+        // NaviStart-style startup: floating/multi buttons, hide recovery square.
+        JctStartup.onProcess(this)
     }
 }
 
 class MainActivity : ComponentActivity() {
+    companion object { const val EXTRA_PAGE = "jct_page" }
+
     private var page by mutableStateOf(Page.Home)
     private var day by mutableStateOf(false)
     private var snap by mutableStateOf(CarBridge.Snap())
     private var toCluster by mutableStateOf(false)
-    private var placement by mutableStateOf(ClusterPlacement.Spot.RIGHT)
-    private var placementArmed by mutableStateOf(false)
-    private var editorSpot: ClusterPlacement.Spot? = null
     private var leavingForMainDisplay = false
     private var showWindows by mutableStateOf(false)
     private var showButtons by mutableStateOf(false)
-    private var edgeOn by mutableStateOf(true)
-    private var edgeRight by mutableStateOf(true)
-    private var edgeTab by mutableStateOf(true)
     private var overlayOk by mutableStateOf(false)
     private var freeform by mutableStateOf(false)
     private var availableApps by mutableStateOf<List<LaunchableApp>>(emptyList())
@@ -80,8 +76,6 @@ class MainActivity : ComponentActivity() {
         snap = car.snap
         car.onChange = carListener
         car.onSpeedClose = { Toast.makeText(this, "أغلق نظام السيارة كاميرا ٣٦٠", Toast.LENGTH_SHORT).show() }
-        EdgeSwipeService.launcherVisible = true
-        EdgeSwipeService.watch = false
         refreshEdge()
     }
 
@@ -91,9 +85,8 @@ class MainActivity : ComponentActivity() {
         availableApps = AppIndex.launchable(this)
         pinnedApps = (application as T1App).prefs.pinnedApps
         recentApps = (application as T1App).prefs.recentApps
-        EdgeSwipeService.launcherVisible = true
-        EdgeSwipeService.watch = false
         refreshEdge()
+        consumePageExtra(intent)
         if (page == Page.Home && freeform) {
             if (expandedPackage != null || SystemClock.elapsedRealtime() - lastDockAt > 1500L) {
                 dockedBounds.clear()
@@ -103,11 +96,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onPause() {
-        EdgeSwipeService.launcherVisible = false
-        EdgeSwipeService.watch = true
-        EdgeSwipeService.sync(this)
-        super.onPause()
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumePageExtra(intent)
+    }
+
+    /** RUN_START_APP_MENU action opens the app list. */
+    private fun consumePageExtra(intent: Intent?) {
+        if (intent?.getStringExtra(EXTRA_PAGE) == "apps") { navigate(Page.Apps); intent.removeExtra(EXTRA_PAGE) }
     }
 
     override fun onStop() {
@@ -121,8 +118,8 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshEdge() {
         overlayOk = Settings.canDrawOverlays(this)
-        freeform = ClusterLaunch.freeformEnabled(this)
-        EdgeSwipeService.sync(this)
+        freeform = HomeAppWindows.freeformEnabled(this)
+        JctLounchService.sync(this)
     }
 
     private fun openOverlaySettings() {
@@ -146,20 +143,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!ensureMainDisplay()) return
-        EdgeSwipeService.launcherVisible = true
-        EdgeSwipeService.watch = false
         WindowCompat.setDecorFitsSystemWindows(window, true)
         val app = application as T1App
         day = app.prefs.day
         toCluster = app.prefs.destinationCluster
-        edgeOn = app.prefs.edgeEnabled
-        edgeRight = app.prefs.edgeRight
-        edgeTab = app.prefs.edgeTab
         pinnedApps = app.prefs.pinnedApps
         recentApps = app.prefs.recentApps
         overlayOk = Settings.canDrawOverlays(this)
-        freeform = ClusterLaunch.freeformEnabled(this)
-        EdgeSwipeService.watch = false
+        freeform = HomeAppWindows.freeformEnabled(this)
         snap = app.car.snap
         setContent {
             BackHandler(enabled = page != Page.Home || showWindows || showButtons) { if (showButtons) showButtons = false else navigate(Page.Home) }
@@ -180,8 +171,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 HomePage(
                                     day, snap, AppIndex.favorites(availableApps, pinnedApps), toCluster,
-                                    placement, placementArmed, { setDest(it) }, { armPlacement(it) },
-                                    { savedSpot(it) }, { openNav() }, { quick(it) }, { launch(it) },
+                                    { setDest(it) }, { openNav() }, { quick(it) }, { launch(it) },
                                     freeform,
                                     AppIndex.find(availableApps, "com.waze"),
                                     AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
@@ -190,15 +180,14 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             Page.Apps -> AppsPage(
-                                day, toCluster, placement, placementArmed, availableApps,
+                                day, toCluster, availableApps,
                                 pinnedApps.toSet(), recentApps,
-                                { setDest(it) }, { armPlacement(it) }, { savedSpot(it) },
+                                { setDest(it) },
                                 { togglePin(it) }
                             ) { launch(it) }
                             Page.Cluster -> ClusterPage(
-                                day, snap, app.prefs, freeform,
-                                { classic() }, { hideAddons() }, { stock() }, { openNav(true) },
-                                { applyCluster(false) }, { clearCluster() }, { editorSpot = it }
+                                day, snap,
+                                { classic() }, { hideAddons() }, { stock() }, { clearCluster() }
                             )
                             Page.Camera -> SimplePage(
                                 "كاميرا ٣٦٠",
@@ -214,30 +203,12 @@ class MainActivity : ComponentActivity() {
                                 day,
                                 "طبّق الكلاسيكي"
                             ) { classic() }
-                            Page.Settings -> if (showButtons) ButtonSettingsPage { showButtons = false } else SettingsPage(
+                            Page.Settings -> if (showButtons) JctSettingsPage(day) { showButtons = false } else SettingsPage(
                                 day = day,
-                                edgeOn = edgeOn,
-                                edgeRight = edgeRight,
-                                edgeTab = edgeTab,
                                 overlayOk = overlayOk,
                                 onDay = {
                                     day = !day
                                     app.prefs.day = day
-                                },
-                                onEdge = { on ->
-                                    edgeOn = on
-                                    app.prefs.edgeEnabled = on
-                                    EdgeSwipeService.sync(this@MainActivity)
-                                },
-                                onRight = { right ->
-                                    edgeRight = right
-                                    app.prefs.edgeRight = right
-                                    EdgeSwipeService.sync(this@MainActivity)
-                                },
-                                onTab = { on ->
-                                    edgeTab = on
-                                    app.prefs.edgeTab = on
-                                    EdgeSwipeService.sync(this@MainActivity)
                                 },
                                 onOverlaySettings = { openOverlaySettings() },
                                 onRecheck = { refreshEdge() },
@@ -254,14 +225,6 @@ class MainActivity : ComponentActivity() {
         toCluster = cluster
         (application as T1App).prefs.destinationCluster = cluster
     }
-
-    private fun armPlacement(spot: ClusterPlacement.Spot) {
-        placement = spot
-        placementArmed = true
-    }
-
-    private fun savedSpot(packageName: String): ClusterPlacement.Spot =
-        ClusterPlacement.fromId((application as T1App).prefs.placementId(packageName))
 
     /** Display 0 only. A cluster instance relaunches there and closes. */
     private fun ensureMainDisplay(): Boolean {
@@ -291,25 +254,16 @@ class MainActivity : ComponentActivity() {
         launch(target, forceCluster || toCluster)
     }
 
+    /**
+     * App tiles use JCarTools' launch path: getLaunchIntentForPackage + FLAG_ACTIVITY_NEW_TASK +
+     * ActivityOptions.makeBasic().setLaunchDisplayId(displays[d]), d = head-unit or cluster index.
+     */
     private fun launch(app: LaunchableApp, cluster: Boolean = toCluster) {
-        try {
-            if (!cluster) {
-                AppIndex.launch(this, app, false, null)
-                rememberLaunch(app.packageName)
-                return
-            }
-            val prefs = (application as T1App).prefs
-            val spot = ClusterPlacement.resolve(prefs.placementId(app.packageName), placement, placementArmed)
-            val custom = prefs.bounds().let { ClusterPresets.Box(it.left, it.top, it.right, it.bottom) }
-            val box = ClusterPlacement.bounds(spot, custom)
-            prefs.setPlacementId(app.packageName, spot.id)
-            placement = spot
-            placementArmed = false
-            AppIndex.launch(this, app, true, android.graphics.Rect(box.left, box.top, box.right, box.bottom))
+        val d = if (cluster) JctLaunch.priIndex(this) else JctLaunch.guIndex(this)
+        if (JctLaunch.startOnDisplayIndex(this, app.packageName, d)) {
+            if (cluster) (application as T1App).prefs.clusterPackage = app.packageName
             rememberLaunch(app.packageName)
-        } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "تعذّر الفتح", Toast.LENGTH_LONG).show()
-        }
+        } else Toast.makeText(this, if (cluster) "تعذّر الفتح على لوحة العدادات" else "تعذّر الفتح", Toast.LENGTH_LONG).show()
     }
 
     private fun rememberLaunch(pkg: String) {
@@ -421,35 +375,13 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this, "أُغلقت نافذة T1 على العدادات", Toast.LENGTH_SHORT).show()
     }
 
-    private fun applyCluster(quiet: Boolean) {
-        val prefs = (application as T1App).prefs
-        val component = prefs.clusterComponent()
-        if (component == null) {
-            if (!quiet) Toast.makeText(this, "افتح تطبيقاً على العدادات أولاً", Toast.LENGTH_SHORT).show()
-            return
-        }
-        try {
-            val spot = editorSpot ?: ClusterPlacement.Spot.CUSTOM
-            editorSpot = null
-            prefs.setPlacementId(component.packageName, spot.id)
-            ClusterLaunch.launch(this, component, prefs.bounds())
-            if (!quiet) Toast.makeText(this, "أُرسل طلب العرض على العدادات؛ انتظر نتيجة التحقق", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "تعذّر تغيير القياس", Toast.LENGTH_LONG).show()
-        }
-    }
-
     private fun clearCluster() {
         android.app.AlertDialog.Builder(this)
             .setTitle("تطبيقات العدادات")
-            .setMessage("النقل يعيد استخدام نافذة التطبيق قدر الإمكان، وقد يفتح التطبيق إن لم يكن يعمل. الإغلاق القوي معطل ولا يفعّل مالك الجهاز.")
-            .setPositiveButton("نقل المتتبعة للرئيسية") { _, _ ->
-                val result = runCatching { ClusterLaunch.clear(this) }.getOrElse { it.message ?: "تعذر النقل" }
-                android.app.AlertDialog.Builder(this).setMessage(result).setPositiveButton("حسناً", null).show()
-            }
+            .setMessage("الإغلاق القوي معطل افتراضياً ولا يفعّل مالك الجهاز.")
             .setNeutralButton("إغلاق قوي للتطبيق المحدد") { _, _ ->
                 val pkg = T1Prefs(this).clusterPackage
-                if (pkg !in ClusterLaunch.trackedPackages(this)) {
+                if (pkg !in JctLaunch.trackedPackages(this)) {
                     Toast.makeText(this, "لا يوجد تطبيق طرف ثالث متتبع محدد", Toast.LENGTH_LONG).show()
                 } else ClusterForceClose.close(this, pkg) { message ->
                     android.app.AlertDialog.Builder(this).setMessage(message).setPositiveButton("حسناً", null).show()

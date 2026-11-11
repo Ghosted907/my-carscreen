@@ -208,9 +208,7 @@ private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCluster: Boolean,
-             placement: ClusterPlacement.Spot, placementArmed: Boolean,
-             onDestination: (Boolean) -> Unit, onPlacement: (ClusterPlacement.Spot) -> Unit,
-             savedPlacement: (String) -> ClusterPlacement.Spot,
+             onDestination: (Boolean) -> Unit,
              onOpenNav: () -> Unit, onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
              dockEnabled: Boolean, waze: LaunchableApp?, youtube: LaunchableApp?,
              onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit) {
@@ -268,18 +266,16 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
             Column(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("التطبيقات المفضلة", color = ink(day), fontSize = 16.sp, modifier = Modifier.weight(1f))
-                    Choice("الشاشة", !toCluster, day) { onDestination(false) }
-                    Choice("العدادات", toCluster, day) { onDestination(true) }
+                    Choice("الجهاز اللوحي", !toCluster, day) { onDestination(false) }
+                    Choice("لوحة العدادات", toCluster, day) { onDestination(true) }
                     ActionButton("عرض الكل", day) { onQuick("apps") }
                 }
-                if (toCluster) ClusterPlacementBar(placement, placementArmed, onPlacement)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
                     items(apps, key = { it.component.flattenToString() }) { app ->
                         Column(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).clickable { onApp(app) }.padding(6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             AppArtwork(app)
                             Text(app.label, color = muted(day), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (toCluster) Text(savedPlacement(app.packageName).labelAr, color = accent(day), fontSize = 11.sp, maxLines = 1)
                         }
                     }
                     if (apps.isEmpty()) item { Text("لا توجد تطبيقات مفضلة", color = muted(day), modifier = Modifier.padding(14.dp)) }

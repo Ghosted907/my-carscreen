@@ -2,7 +2,6 @@ package com.ghosted907.t1launcher
 
 /** Pure decisions, deliberately independent of Android for local JVM tests. */
 object ClusterMovePolicy {
-    const val REUSE_FLAGS = 0x10000000 or 0x00020000 or 0x00200000
     data class Panel(val id: Int, val width: Int, val height: Int)
     fun main(panels: List<Panel>): Int? = panels.firstOrNull { it.id == 0 }?.id
     // Never send apps to an arbitrary secondary panel or assume array index == display ID.

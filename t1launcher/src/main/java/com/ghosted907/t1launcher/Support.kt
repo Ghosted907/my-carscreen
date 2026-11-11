@@ -38,7 +38,6 @@ class ClusterAddonActivity : Activity() {
             topMargin = 24
         })
         setContentView(root)
-        window.decorView.post { ClusterLaunch.hideOwnCaption(window) }
         Log.i("T1Launcher", "addon slots $enabled")
     }
 
@@ -125,15 +124,9 @@ class MediaHub(private val context: android.content.Context) {
 }
 
 class T1TouchService : android.accessibilityservice.AccessibilityService() {
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
-        // Overlay permission is often granted while T1 is in the background.
-        // The next window change is enough to start the edge button if it is not up yet.
-        if (EdgeSwipeService.running) return
-        if (!android.provider.Settings.canDrawOverlays(this)) return
-        val prefs = T1Prefs(this)
-        if (!prefs.edgeEnabled && !prefs.edgeTab) return
-        EdgeSwipeService.arm(this)
-    }
+    /** Hosts NaviStart-style edge zones (MyA11yService + GestureZoneManager). */
+    var zones: JctGestureZones? = null
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
     override fun onServiceConnected() {
@@ -141,10 +134,14 @@ class T1TouchService : android.accessibilityservice.AccessibilityService() {
         // GestureDescription.Builder.setDisplayId exists only from API 33.
         // On Android 11 a gesture cannot be aimed at display 1.
         Log.i("T1Launcher", "touch service connected; display targeting requires API 33+")
-        EdgeSwipeService.arm(this)
+        zones = JctGestureZones(this).also { it.refresh() }
+        // Overlays switch to TYPE_ACCESSIBILITY_OVERLAY now that the service is up (y0.a.k()).
+        JctLounchService.sync(this)
+        if (JctUserAppsHide.enabled(this)) { JctHideZone.dismiss(); JctHideZone.show(this) }
     }
 
     override fun onDestroy() {
+        zones?.remove(); zones = null
         if (instance == this) instance = null
         super.onDestroy()
     }
@@ -176,7 +173,7 @@ class BootReceiver : android.content.BroadcastReceiver() {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
         ClusterForceClose.recover(context)
         Log.i("T1Launcher", "boot received")
-        EdgeSwipeService.arm(context)
+        JctStartup.onBoot(context)
     }
 }
 
@@ -185,4 +182,53 @@ fun homeEnabled(context: android.content.Context): Boolean {
         ComponentName(context, "com.ghosted907.t1launcher.HomeAlias")
     )
     return state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+}
+
+
+/** Startup hooks ported from NaviStart (LounchB.c, boot hide-zone, MyCarReceiver auto-start). */
+object JctStartup {
+    fun onProcess(context: android.content.Context) {
+        JctMigration.run(context)
+        JctLounchService.sync(context)
+        if (JctUserAppsHide.enabled(context)) runCatching { JctHideZone.show(context) }
+    }
+    fun onBoot(context: android.content.Context) {
+        onProcess(context)
+        JctBootService.onCarStart(context)
+    }
+}
+
+/**
+ * One-time carry-over of the old launcher settings into NaviStart keys (launcher-specific, not a
+ * JCarTools behaviour): old edge buttons -> multi-button slots, old edge strip -> two edge zones.
+ */
+object JctMigration {
+    fun run(context: android.content.Context) {
+        val jct = JctStore.p(context)
+        if (jct.getBoolean("migrated_v1", false)) return
+        val old = context.getSharedPreferences("t1", android.content.Context.MODE_PRIVATE)
+        val targets = runCatching {
+            val text = old.getString("edgeButtonsV1", null)
+            if (text == null) listOf("__launcher__", "app.revanced.android.youtube") else {
+                val arr = org.json.JSONObject(text).getJSONArray("buttons")
+                (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optBoolean("enabled", true) }.map { it.getString("target") }
+            }
+        }.getOrDefault(emptyList())
+        val e = jct.edit()
+        targets.take(8).forEachIndexed { i, t ->
+            val action = if (t == "__launcher__") JctActions.ENUM + JctEnum.RUN_START_APP_MENU.name
+                else JctActions.APP + (android.content.ComponentName.unflattenFromString(t)?.packageName ?: t)
+            e.putString(JctStore.MULTI_ACTION + i, action)
+        }
+        if (targets.isNotEmpty()) e.putBoolean(JctStore.MULTI_ON, true).putInt(JctStore.MULTI_COUNT, if (targets.size > 4) 8 else 6)
+        if (old.getBoolean("edge", true)) {
+            val right = old.getBoolean("edgeRight", true)
+            val zones = if (right) listOf(JctZone.RIGHT_TOP, JctZone.RIGHT_BOTTOM) else listOf(JctZone.LEFT_TOP, JctZone.LEFT_BOTTOM)
+            val zp = JctGestureZones.prefs(context).edit()
+            zones.forEach { z -> zp.putBoolean("enabled_" + z.name, true)
+                e.putString(JctStore.ZONE_ACTION + z.name, JctActions.ENUM + JctEnum.RUN_START_APP_MENU.name) }
+            zp.apply()
+        }
+        e.putBoolean("migrated_v1", true).apply()
+    }
 }
