@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghosted907.t1launcher"
         minSdk = 30
         targetSdk = 30
-        versionCode = 6
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.9.0"
     }
 
     val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")
@@ -59,6 +59,9 @@ android {
     }
 
     lint {
+        // This is a sideloaded Android 11/12 vehicle app, not a Google Play submission.
+        // Retain the established target-30 compatibility; still surface this as a warning.
+        warning += "ExpiredTargetSdkVersion"
         checkReleaseBuilds = false
     }
 }
@@ -76,4 +79,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.13.1")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

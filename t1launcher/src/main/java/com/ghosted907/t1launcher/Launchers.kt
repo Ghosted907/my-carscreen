@@ -1,11 +1,14 @@
 package com.ghosted907.t1launcher
 
+import android.app.Activity
+import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
+import android.os.Bundle
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
@@ -17,29 +20,70 @@ data class LaunchableApp(
     val packageName: String
 )
 
+/** Display 0 for T1 itself and for apps opened on the main screen. */
+object LauncherDisplay {
+    private const val WINDOWING_MODE_FULLSCREEN = 1
+    private const val KEY_WINDOWING_MODE = "android.activity.windowingMode"
+    private var moves = 0
+
+    fun bundle(): Bundle {
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        return options.toBundle() ?: Bundle()
+    }
+
+    fun start(context: Context, intent: Intent) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent, bundle())
+    }
+
+    /** True only when the activity is attached to a display that is not display 0. */
+    fun isOffMain(activity: Activity): Boolean {
+        val id = activity.display?.displayId ?: return false
+        return id != Display.DEFAULT_DISPLAY && id != Display.INVALID_DISPLAY
+    }
+
+    fun noteOnMain() {
+        moves = 0
+    }
+
+    /**
+     * Opens MainActivity on display 0.
+     * CLEAR_TASK is paired with NEW_TASK so singleTask does not reuse a task left on the cluster.
+     */
+    fun moveToMain(activity: Activity) {
+        if (moves >= 3) {
+            Log.i("T1Launcher", "launcher display move stopped")
+            return
+        }
+        moves += 1
+        val intent = Intent(activity.applicationContext, MainActivity::class.java).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        )
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        val bundle = options.toBundle() ?: Bundle()
+        bundle.putInt(KEY_WINDOWING_MODE, WINDOWING_MODE_FULLSCREEN)
+        activity.applicationContext.startActivity(intent, bundle)
+    }
+}
+
 object Displays {
-    /** Physical cluster: a non-default display near 1920×720. Never assume index 1. */
-    fun clusterId(context: Context): Int? {
-        val manager = context.getSystemService(DisplayManager::class.java) ?: return null
-        val displays = manager.displays
-        val sized = displays.filter { it.displayId != Display.DEFAULT_DISPLAY }.map { display ->
+    private fun panels(context: Context): List<ClusterMovePolicy.Panel> {
+        val manager = context.getSystemService(DisplayManager::class.java) ?: return emptyList()
+        return manager.displays.map { display ->
             val metrics = DisplayMetrics()
             display.getRealMetrics(metrics)
-            Triple(display.displayId, metrics.widthPixels, metrics.heightPixels)
+            ClusterMovePolicy.Panel(display.displayId, metrics.widthPixels, metrics.heightPixels)
         }
-        Log.i("T1Launcher", "displays " + sized.joinToString { "${it.first}:${it.second}x${it.third}" })
-        // The car's cluster is display 1. Prefer it when that panel is attached.
-        if (sized.any { it.first == 1 }) return 1
-        return sized.firstOrNull { it.second >= 1600 && it.third in 640..800 }?.first
-            ?: sized.firstOrNull()?.first
     }
+    fun mainId(context: Context): Int? = ClusterMovePolicy.main(panels(context))
+    fun clusterId(context: Context): Int? = ClusterMovePolicy.cluster(panels(context))
 }
 
 object AppIndex {
     private val preferred = listOf(
+        "com.google.android.apps.maps" to "الخرائط",
         "com.google.android.youtube" to "YouTube",
         "com.waze" to "Waze",
-        "com.google.android.apps.maps" to "الخرائط",
         "com.android.chrome" to "المتصفح",
         "com.android.vending" to "متجر التطبيقات",
         "ru.vk.store" to "RuStore"
@@ -59,10 +103,11 @@ object AppIndex {
         }.sortedBy { it.label }
     }
 
-    fun favorites(all: List<LaunchableApp>): List<LaunchableApp> {
+    fun favorites(all: List<LaunchableApp>, pinned: List<String> = emptyList()): List<LaunchableApp> {
         val byPackage = all.associateBy { it.packageName }
         val picked = mutableListOf<LaunchableApp>()
-        preferred.forEach { (pkg, _) -> byPackage[pkg]?.let { picked += it } }
+        pinned.forEach { pkg -> byPackage[pkg]?.let { picked += it } }
+        preferred.forEach { (pkg, _) -> byPackage[pkg]?.let { if (picked.none { p -> p.packageName == pkg }) picked += it } }
         all.firstOrNull { it.packageName.contains("carplay", true) || it.packageName.contains("autolink", true) && it.label.contains("car", true) }
             ?.let { if (picked.none { p -> p.packageName == it.packageName }) picked += it }
         if (picked.size < 8) {
@@ -77,19 +122,15 @@ object AppIndex {
         packages.firstNotNullOfOrNull { pkg -> all.firstOrNull { it.packageName == pkg } }
 
     fun launch(context: Context, app: LaunchableApp, onCluster: Boolean, bounds: Rect?) {
-        val intent = Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setComponent(app.component)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         if (!onCluster) {
-            context.startActivity(intent)
+            ClusterLaunch.moveToMain(context, app.component)
             return
         }
         val rect = if (bounds != null && bounds.width() > 0 && bounds.height() > 0) {
             bounds
         } else {
-            val center = ClusterPresets.center()
-            Rect(center.left, center.top, center.right, center.bottom)
+            val right = ClusterPresets.rightSide()
+            Rect(right.left, right.top, right.right, right.bottom)
         }
         ClusterLaunch.launch(context, app.component, rect)
     }
@@ -104,14 +145,18 @@ object AppIndex {
         val found = candidates.firstOrNull { runCatching { pm.getActivityInfo(it, 0) }.isSuccess }
         if (found != null) {
             intent.component = found
-            context.startActivity(intent)
+            LauncherDisplay.start(context, intent)
         } else {
-            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            LauncherDisplay.start(
+                context,
+                Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         }
     }
 
     fun openListenerSettings(context: Context) {
-        context.startActivity(
+        LauncherDisplay.start(
+            context,
             Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }

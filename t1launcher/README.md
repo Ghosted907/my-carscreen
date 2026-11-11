@@ -1,11 +1,33 @@
 # T1 launcher
 
+Local development update (2026-11-12): the launcher uses a Saudi green and gold theme, a gold
+crossed-swords-and-palm emblem and a restrained geometric gold trim. Its display layout follows
+the original Jetour screens in `screenshots/original`: a dark, image-led canvas, the vehicle as the
+main visual, slim data labels, square control tiles, a circular compass, and bottom navigation.
+The vehicle overview now uses
+a generated top-down T1 image based on the original car artwork; the earlier T2-like drivetrain image
+is no longer shown. Tire pressure and temperature sit beside the corresponding four wheels, with
+drive mode, steering, pitch, roll, heading, and altitude below. This overview opens first under
+**بيانات السيارة**; the full readings and searchable property catalogue remain in adjacent tabs.
+The home screen places live Waze and YouTube freeform tasks over two fixed cards directly below
+the Jetour image when freeform support
+is enabled. Tapping a card header expands that task to fullscreen; bringing T1 to the front restores
+the task to its card where the device permits task reuse. The original home car artwork and live
+driving readings remain below. Long-press an app to pin it ahead of the default shortcuts;
+the Apps page also shows recently launched apps. Apps can open on the main screen or cluster, and
+the edge gesture, configurable quick buttons, and saved cluster placement remain available.
+All 99 structured readings and the searchable OEM SDK catalogue
+remain under **بيانات السيارة**. Window, roof, and OEM settings controls are under **التحكم**.
+See [TELEMETRY.md](TELEMETRY.md) for coverage, raw-value semantics, and validation.
+The previous debug APK was installed on the car for a visual and live-reading check. This version
+was built locally and has not yet been verified on the connected car.
+
 Home screen for the Jetour T1 main display. It does not replace the OEM launcher unless you turn that on in Settings.
 
 ## Install
 
 ```bash
-pm install -r -i com.android.packageinstaller t1launcher-debug.apk
+adb install -r ..\..\t1launcher-saudi-v1.9.0.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -17,7 +39,17 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 6, versionName 1.5.0. Nothing has been published yet, so the first release keeps this pair. The git tag follows this versionName (`v1.5.0`). After a release ships, the next launcher change increments versionCode by 1 and versionName. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 10, versionName 1.9.0. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+
+## Home app windows
+
+Waze (`com.waze`) and YouTube ReVanced (`app.revanced.android.youtube`) or regular YouTube
+(`com.google.android.youtube`) appear as live, interactive windows on the main display when the
+device has freeform support enabled. The card header expands an existing task to fullscreen.
+When T1 returns to the foreground, it requests the same task at the card bounds; Android may
+instead start a new task if the app or OEM window manager refuses reuse. Without freeform support,
+the cards explain the requirement and their headers still open the apps fullscreen. The freeform
+commands below are also needed for these main-display windows.
 
 Release APKs are signed with a fixed release key that is not in git. Debug builds still use the local debug keystore and do not need that secret. Installing a release APK over a build that was signed with the debug key fails until that older package is uninstalled once:
 
@@ -53,56 +85,6 @@ Settings shows the same grant command when the permission is missing, and has th
 
 ## Windows, sunroof, sunshade
 
-Home tile **النوافذ والفتحة**. Each control is one tap and stays available while driving. There is no speed or gear lock and no press-and-hold. **إيقاف / سكّر الكل** stays on screen and sends close for all windows, the sunroof, and the sunshade.
+Open **التحكم** from the home shortcuts or the bottom navigation. The window, roof, and shade buttons send only the audited commands listed in `VehicleCommands.kt` through the OEM `alcar_service` Binder interface. A command is sent only after a button press. The app reports whether the service accepted the request; actual movement still needs validation on the car.
 
-Commands go only through the OEM assistant receiver `com.autolink.voiceassistant/.adapter.core.iflytek.IflytekMessageReceiver`, action `com.iflytek.autofly.handMessage`, string extra `value`. The JSON lives in `src/main/assets/window_commands.json`. Every send is logged with tag `T1Launcher` as `handMessage id=... value=...`.
-
-Test one at a time with `adb shell am broadcast -n com.autolink.voiceassistant/.adapter.core.iflytek.IflytekMessageReceiver -a com.iflytek.autofly.handMessage --es value '<json>'`.
-
-All windows open:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"open\",\"semantic\":{\"slots\":{\"name\":\"car_window\",\"position\":\"all\"}}}"}
-```
-
-All windows close:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"close\",\"semantic\":{\"slots\":{\"name\":\"car_window\",\"position\":\"all\"}}}"}
-```
-
-Driver window open:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"open\",\"semantic\":{\"slots\":{\"name\":\"car_window\",\"position\":\"main_driver\"}}}"}
-```
-
-Driver window close:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"close\",\"semantic\":{\"slots\":{\"name\":\"car_window\",\"position\":\"main_driver\"}}}"}
-```
-
-Sunroof open:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"open\",\"semantic\":{\"slots\":{\"name\":\"sunroof\"}}}"}
-```
-
-Sunroof close:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"close\",\"semantic\":{\"slots\":{\"name\":\"sunroof\"}}}"}
-```
-
-Sunshade open:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"open\",\"semantic\":{\"slots\":{\"name\":\"sunshade\"}}}"}
-```
-
-Sunshade close:
-
-```text
-{"messageType":"REQUEST","focus":"carControl","position":"main_driver","content":"{\"service\":\"carControl\",\"operation\":\"close\",\"semantic\":{\"slots\":{\"name\":\"sunshade\"}}}"}
-```
+The tailgate button stays disabled until its exact OEM command is documented. The live speed and gear readings are shown for context, and unverified values are not presented as current readings.

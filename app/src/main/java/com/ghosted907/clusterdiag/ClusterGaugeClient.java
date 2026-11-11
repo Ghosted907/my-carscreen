@@ -29,6 +29,13 @@ final class ClusterGaugeClient {
     static final int SPEED_PROP = 559941888;
     static final int RPM_PROP = 559944245;
     static final int TEMP_PROP = 559940264;
+    static final int TEMP_FALLBACK = 559953700;
+    static final int ENGINE_TEMP = 559940105;
+    static final int ODOMETER = 291504644;
+    static final int CRUISE_SET = 559941688;
+    static final int LKA_STATUS = 557843733;
+    static final int LDW_STATUS = 557843283;
+    static final int FCW_STATUS = 557843461;
     static final int LOW_BEAM = 557843647;
     static final int HIGH_BEAM = 557843648;
 
@@ -65,6 +72,13 @@ final class ClusterGaugeClient {
         boolean rightTurn;
         boolean lowBeam;
         boolean highBeam;
+        float outsideFallback = Float.NaN;
+        float engineC = Float.NaN;
+        float odometerKm = Float.NaN;
+        float cruiseKmh = Float.NaN;
+        int lka = Integer.MIN_VALUE;
+        int ldw = Integer.MIN_VALUE;
+        int fcw = Integer.MIN_VALUE;
         final Map<String, String> debug = new LinkedHashMap<String, String>();
     }
 
@@ -99,6 +113,7 @@ final class ClusterGaugeClient {
     private volatile int gearProp = GaugeFormat.GEAR_POSITION;
     private volatile String gearMap = "";
     private volatile int[] probeIds = new int[0];
+    private volatile boolean laylReads;
     private final Map<Integer, Integer> lastGear = new LinkedHashMap<Integer, Integer>();
     private final Map<Integer, Integer> lastProbe = new LinkedHashMap<Integer, Integer>();
 
@@ -174,6 +189,11 @@ final class ClusterGaugeClient {
         gearMap = map == null ? "" : map;
         probeIds = probe == null ? new int[0] : probe;
         log("gear config prop=" + gearProp + " map=" + gearMap + " probe=" + probeIds.length);
+    }
+
+    /** Extra read-only polls used only by Layl Najd. Getters only, never a setter. */
+    void enableLaylReads() {
+        laylReads = true;
     }
 
     void start() {
@@ -290,6 +310,9 @@ final class ClusterGaugeClient {
                     readProbe(carBinder, extra[i]);
                 }
             }
+            if (laylReads && (tick == 1 || tick % 10 == 0)) {
+                readLayl(carBinder);
+            }
             long now = android.os.SystemClock.uptimeMillis();
             if (now - lastSnapAt >= 2000L) {
                 lastSnapAt = now;
@@ -339,6 +362,14 @@ final class ClusterGaugeClient {
                     reading.rpm = value;
                 } else if ("temp".equals(key)) {
                     reading.outsideC = value;
+                } else if ("temp2".equals(key)) {
+                    reading.outsideFallback = value;
+                } else if ("engine".equals(key)) {
+                    reading.engineC = value;
+                } else if ("odo".equals(key)) {
+                    reading.odometerKm = value;
+                } else if ("cruise".equals(key)) {
+                    reading.cruiseKmh = value;
                 }
                 reading.debug.put(key + " " + prop, Float.toString(value));
             }
@@ -365,6 +396,12 @@ final class ClusterGaugeClient {
                     reading.lowBeam = value == 1;
                 } else if ("highBeam".equals(key)) {
                     reading.highBeam = value == 1;
+                } else if ("lka".equals(key)) {
+                    reading.lka = value;
+                } else if ("ldw".equals(key)) {
+                    reading.ldw = value;
+                } else if ("fcw".equals(key)) {
+                    reading.fcw = value;
                 }
                 reading.debug.put(key + " " + prop, Integer.toString(value));
             }
@@ -423,6 +460,29 @@ final class ClusterGaugeClient {
             log("IALCar dead during probe " + prop);
         } catch (RemoteException e) {
             log("PROBE id=" + prop + " err=" + e.getClass().getSimpleName() + " " + e.getMessage());
+        }
+    }
+
+    private void readLayl(IBinder binder) {
+        readFloat(binder, TEMP_FALLBACK, "temp2");
+        readFloat(binder, ENGINE_TEMP, "engine");
+        readFloat(binder, ODOMETER, "odo");
+        readFloat(binder, CRUISE_SET, "cruise");
+        readInt(binder, LKA_STATUS, "lka");
+        readInt(binder, LDW_STATUS, "ldw");
+        readInt(binder, FCW_STATUS, "fcw");
+        Integer gear = lastGear.get(Integer.valueOf(GaugeFormat.GEAR_POSITION));
+        synchronized (reading) {
+            Log.i("LaylNajd", "raw temp2=" + reading.outsideFallback
+                    + " engine=" + reading.engineC
+                    + " odo=" + reading.odometerKm
+                    + " cruise=" + reading.cruiseKmh
+                    + " lka=" + reading.lka
+                    + " ldw=" + reading.ldw
+                    + " fcw=" + reading.fcw
+                    + " rpm=" + reading.rpm
+                    + " speed=" + reading.speed
+                    + " gear557843105=" + (gear == null ? "none" : gear.toString()));
         }
     }
 
@@ -608,6 +668,13 @@ final class ClusterGaugeClient {
             copy.rightTurn = reading.rightTurn;
             copy.lowBeam = reading.lowBeam;
             copy.highBeam = reading.highBeam;
+            copy.outsideFallback = reading.outsideFallback;
+            copy.engineC = reading.engineC;
+            copy.odometerKm = reading.odometerKm;
+            copy.cruiseKmh = reading.cruiseKmh;
+            copy.lka = reading.lka;
+            copy.ldw = reading.ldw;
+            copy.fcw = reading.fcw;
             copy.debug.putAll(reading.debug);
         }
         return copy;

@@ -40,4 +40,6 @@
     <string name="cluster_show">شغّل على العدادات\nShow on cluster</string>
     <string name="cluster_preview">معاينة\nPreview</string>
     <string name="cluster_close">إغلاق العداد\nClose cluster</string>
+    <string name="layl_show">ليل نجد على العدادات\nLayl Najd on cluster</string>
+    <string name="layl_preview">معاينة ليل نجد\nPreview Layl Najd</string>
 </resources>

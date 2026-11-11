@@ -25,6 +25,25 @@ object ClusterPresets {
 
     fun rightHalf(width: Int = DESIGN_W, height: Int = DESIGN_H) = Box(width / 2, 0, width, height)
 
+    /** 800px window flush to the right edge (1120,0–1920,720 on the design panel). */
+    fun rightSide(width: Int = DESIGN_W, height: Int = DESIGN_H): Box {
+        val boxW = sideWidth(width)
+        val left = (width - boxW).coerceAtLeast(0)
+        return Box(left, 0, left + boxW, height)
+    }
+
+    /** Mirror of [rightSide], flush to the left edge. */
+    fun leftSide(width: Int = DESIGN_W, height: Int = DESIGN_H): Box {
+        val boxW = sideWidth(width)
+        return Box(0, 0, boxW, height)
+    }
+
+    private fun sideWidth(width: Int): Int {
+        val panel = width.coerceAtLeast(1)
+        if (panel == DESIGN_W) return 800
+        return (panel * 800f / DESIGN_W).toInt().coerceIn(minOf(240, panel), panel)
+    }
+
     fun custom(x: Int, y: Int, w: Int, h: Int, width: Int = DESIGN_W, height: Int = DESIGN_H): Box {
         val maxW = width.coerceAtLeast(1)
         val maxH = height.coerceAtLeast(1)

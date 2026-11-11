@@ -6,9 +6,15 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.graphics.Rect
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,9 +34,12 @@ class T1App : android.app.Application() {
     lateinit var prefs: T1Prefs
     override fun onCreate() {
         super.onCreate()
+        ClusterForceClose.recover(this)
         prefs = T1Prefs(this)
         car = CarBridge(this)
         car.start()
+        // Process start is enough. Permission may already be granted while no activity is open.
+        EdgeSwipeService.arm(this)
     }
 }
 
@@ -39,11 +48,27 @@ class MainActivity : ComponentActivity() {
     private var day by mutableStateOf(false)
     private var snap by mutableStateOf(CarBridge.Snap())
     private var toCluster by mutableStateOf(false)
+    private var placement by mutableStateOf(ClusterPlacement.Spot.RIGHT)
+    private var placementArmed by mutableStateOf(false)
+    private var editorSpot: ClusterPlacement.Spot? = null
+    private var leavingForMainDisplay = false
     private var showWindows by mutableStateOf(false)
+    private var showButtons by mutableStateOf(false)
     private var edgeOn by mutableStateOf(true)
     private var edgeRight by mutableStateOf(true)
+    private var edgeTab by mutableStateOf(true)
     private var overlayOk by mutableStateOf(false)
     private var freeform by mutableStateOf(false)
+    private var availableApps by mutableStateOf<List<LaunchableApp>>(emptyList())
+    private var pinnedApps by mutableStateOf<List<String>>(emptyList())
+    private var recentApps by mutableStateOf<List<String>>(emptyList())
+    private val homeBounds = mutableMapOf<String, Rect>()
+    private val dockedBounds = mutableMapOf<String, Rect>()
+    private val dockHandler = Handler(Looper.getMainLooper())
+    private var dockScheduled = false
+    private var lastDockAt = 0L
+    private var expandedPackage: String? = null
+    private val carListener: (CarBridge.Snap) -> Unit = { snap = it }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) beginVoice(this) { handleVoice(it) }
         else Toast.makeText(this, "الميكروفون مرفوض", Toast.LENGTH_SHORT).show()
@@ -51,20 +76,47 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        val car = (application as T1App).car
+        snap = car.snap
+        car.onChange = carListener
+        car.onSpeedClose = { Toast.makeText(this, "أغلق نظام السيارة كاميرا ٣٦٠", Toast.LENGTH_SHORT).show() }
+        EdgeSwipeService.launcherVisible = true
         EdgeSwipeService.watch = false
         refreshEdge()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!ensureMainDisplay()) return
+        availableApps = AppIndex.launchable(this)
+        pinnedApps = (application as T1App).prefs.pinnedApps
+        recentApps = (application as T1App).prefs.recentApps
+        EdgeSwipeService.launcherVisible = true
         EdgeSwipeService.watch = false
         refreshEdge()
+        if (page == Page.Home && freeform) {
+            if (expandedPackage != null || SystemClock.elapsedRealtime() - lastDockAt > 1500L) {
+                dockedBounds.clear()
+                expandedPackage = null
+                scheduleHomeDock()
+            }
+        }
     }
 
     override fun onPause() {
+        EdgeSwipeService.launcherVisible = false
         EdgeSwipeService.watch = true
         EdgeSwipeService.sync(this)
         super.onPause()
+    }
+
+    override fun onStop() {
+        val car = (application as T1App).car
+        if (car.onChange === carListener) {
+            car.onChange = null
+            car.onSpeedClose = null
+        }
+        super.onStop()
     }
 
     private fun refreshEdge() {
@@ -75,7 +127,8 @@ class MainActivity : ComponentActivity() {
 
     private fun openOverlaySettings() {
         try {
-            startActivity(
+            LauncherDisplay.start(
+                this,
                 Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:$packageName")
@@ -92,64 +145,80 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!ensureMainDisplay()) return
+        EdgeSwipeService.launcherVisible = true
+        EdgeSwipeService.watch = false
         WindowCompat.setDecorFitsSystemWindows(window, true)
         val app = application as T1App
         day = app.prefs.day
         toCluster = app.prefs.destinationCluster
         edgeOn = app.prefs.edgeEnabled
         edgeRight = app.prefs.edgeRight
+        edgeTab = app.prefs.edgeTab
+        pinnedApps = app.prefs.pinnedApps
+        recentApps = app.prefs.recentApps
         overlayOk = Settings.canDrawOverlays(this)
         freeform = ClusterLaunch.freeformEnabled(this)
         EdgeSwipeService.watch = false
-        app.car.onChange = { snap = it }
-        app.car.onSpeedClose = {
-            Toast.makeText(this, "أُغلقت كاميرا ٣٦٠ بسبب السرعة", Toast.LENGTH_LONG).show()
-        }
         snap = app.car.snap
         setContent {
+            BackHandler(enabled = page != Page.Home || showWindows || showButtons) { if (showButtons) showButtons = false else navigate(Page.Home) }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 T1Shell(
                     page = page,
                     day = day,
                     snap = snap,
-                    onPage = { page = it },
+                    onPage = { navigate(it) },
                     onMic = { voice() },
-                    onOemAssistant = { OemAssistant.request(this@MainActivity) }
+                    onOemAssistant = { OemAssistant.request(this@MainActivity) },
+                    onDay = { day = !day; app.prefs.day = day }
                 ) {
-                    androidx.compose.foundation.layout.Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
+                    androidx.compose.foundation.layout.Box {
                         when (page) {
                             Page.Home -> if (showWindows) {
                                 WindowsPage(day) { showWindows = false }
                             } else {
-                                HomePage(day, snap, AppIndex.favorites(AppIndex.launchable(this@MainActivity)), toCluster, { setDest(it) }, { openNav() }, { quick(it) }, { launch(it) })
+                                HomePage(
+                                    day, snap, AppIndex.favorites(availableApps, pinnedApps), toCluster,
+                                    placement, placementArmed, { setDest(it) }, { armPlacement(it) },
+                                    { savedSpot(it) }, { openNav() }, { quick(it) }, { launch(it) },
+                                    freeform,
+                                    AppIndex.find(availableApps, "com.waze"),
+                                    AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
+                                    { appToDock, bounds -> onHomeDockMeasured(appToDock, bounds) },
+                                    { expandHomeApp(it) }
+                                )
                             }
-                            Page.Apps -> AppsPage(day, toCluster, { setDest(it) }) { launch(it) }
+                            Page.Apps -> AppsPage(
+                                day, toCluster, placement, placementArmed, availableApps,
+                                pinnedApps.toSet(), recentApps,
+                                { setDest(it) }, { armPlacement(it) }, { savedSpot(it) },
+                                { togglePin(it) }
+                            ) { launch(it) }
                             Page.Cluster -> ClusterPage(
                                 day, snap, app.prefs, freeform,
                                 { classic() }, { hideAddons() }, { stock() }, { openNav(true) },
-                                { applyCluster(false) }, { clearCluster() }
+                                { applyCluster(false) }, { clearCluster() }, { editorSpot = it }
                             )
                             Page.Camera -> SimplePage(
                                 "كاميرا ٣٦٠",
-                                "الزر يرسل نفس أمر الشريط الأصلي: startService AvmService مع key_type=1. لا نعيد فتحها إذا أغلقتها السيارة بسبب السرعة.\nالحالة: ${if (snap.avmOpen == true) "مفتوحة" else if (snap.avmOpen == false) "مقفلة" else "غير معروفة"}",
+                                "عرض كاميرات السيارة المحيطية.\nالحالة: ${if (snap.avmOpen == true) "مفتوحة" else if (snap.avmOpen == false) "مغلقة" else "غير متاحة"}",
                                 day,
                                 "كاميرا ٣٦٠"
                             ) { app.car.openAvm() }
-                            Page.Vehicle -> SimplePage(
-                                "بيانات السيارة",
-                                "الترس ${app.car.gearLetter(snap.gear).ifBlank { "--" }}   السرعة ${snap.speed?.toInt() ?: "--"}   الدوران ${snap.rpm?.toInt() ?: "--"}\nالمدى ${snap.rangeKm ?: "--"} كم   الوقود ${snap.fuel ?: "--"}%   الوضع ${app.car.modeLabel(snap.driveMode)}   الحرارة ${snap.temp?.toInt() ?: "--"}°\nالقراءة فقط. القيم الناقصة تظهر --.",
-                                day
-                            )
+                            Page.Vehicle -> VehiclePage(day, snap, app.car)
+                            Page.Controls -> ControlsPage(day, snap) { quick("windows") }
                             Page.Customize -> SimplePage(
                                 "التخصيص",
                                 "القالب الكلاسيكي هو الافتراضي. الإضافات S1–S10 مطفأة حتى تفعّلها، ولا تغطي مؤشرات الأمان.\nثيم مقروء: ${snap.theme ?: "--"}  الخط: ${snap.font ?: "--"}",
                                 day,
                                 "طبّق الكلاسيكي"
                             ) { classic() }
-                            Page.Settings -> SettingsPage(
+                            Page.Settings -> if (showButtons) ButtonSettingsPage { showButtons = false } else SettingsPage(
                                 day = day,
                                 edgeOn = edgeOn,
                                 edgeRight = edgeRight,
+                                edgeTab = edgeTab,
                                 overlayOk = overlayOk,
                                 onDay = {
                                     day = !day
@@ -165,8 +234,14 @@ class MainActivity : ComponentActivity() {
                                     app.prefs.edgeRight = right
                                     EdgeSwipeService.sync(this@MainActivity)
                                 },
+                                onTab = { on ->
+                                    edgeTab = on
+                                    app.prefs.edgeTab = on
+                                    EdgeSwipeService.sync(this@MainActivity)
+                                },
                                 onOverlaySettings = { openOverlaySettings() },
-                                onRecheck = { refreshEdge() }
+                                onRecheck = { refreshEdge() },
+                                onButtons = { showButtons = true }
                             )
                         }
                     }
@@ -180,9 +255,35 @@ class MainActivity : ComponentActivity() {
         (application as T1App).prefs.destinationCluster = cluster
     }
 
+    private fun armPlacement(spot: ClusterPlacement.Spot) {
+        placement = spot
+        placementArmed = true
+    }
+
+    private fun savedSpot(packageName: String): ClusterPlacement.Spot =
+        ClusterPlacement.fromId((application as T1App).prefs.placementId(packageName))
+
+    /** Display 0 only. A cluster instance relaunches there and closes. */
+    private fun ensureMainDisplay(): Boolean {
+        if (!LauncherDisplay.isOffMain(this)) {
+            LauncherDisplay.noteOnMain()
+            return true
+        }
+        if (leavingForMainDisplay) return false
+        leavingForMainDisplay = true
+        Log.i("T1Launcher", "launcher display ${display?.displayId} -> 0")
+        try {
+            LauncherDisplay.moveToMain(this)
+        } catch (e: Exception) {
+            Log.i("T1Launcher", "launcher display move failed ${e.javaClass.simpleName} ${e.message}")
+        }
+        finish()
+        return false
+    }
+
     private fun openNav(forceCluster: Boolean = false) {
         val apps = AppIndex.launchable(this)
-        val target = AppIndex.find(apps, "com.waze", "com.google.android.apps.maps")
+        val target = AppIndex.find(apps, "com.google.android.apps.maps", "com.waze")
         if (target == null) {
             Toast.makeText(this, "Waze أو الخرائط غير مثبتة", Toast.LENGTH_SHORT).show()
             return
@@ -192,22 +293,110 @@ class MainActivity : ComponentActivity() {
 
     private fun launch(app: LaunchableApp, cluster: Boolean = toCluster) {
         try {
-            AppIndex.launch(this, app, cluster, if (cluster) (application as T1App).prefs.bounds() else null)
+            if (!cluster) {
+                AppIndex.launch(this, app, false, null)
+                rememberLaunch(app.packageName)
+                return
+            }
+            val prefs = (application as T1App).prefs
+            val spot = ClusterPlacement.resolve(prefs.placementId(app.packageName), placement, placementArmed)
+            val custom = prefs.bounds().let { ClusterPresets.Box(it.left, it.top, it.right, it.bottom) }
+            val box = ClusterPlacement.bounds(spot, custom)
+            prefs.setPlacementId(app.packageName, spot.id)
+            placement = spot
+            placementArmed = false
+            AppIndex.launch(this, app, true, android.graphics.Rect(box.left, box.top, box.right, box.bottom))
+            rememberLaunch(app.packageName)
         } catch (e: Exception) {
             Toast.makeText(this, e.message ?: "تعذّر الفتح", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun rememberLaunch(pkg: String) {
+        val updated = (listOf(pkg) + recentApps.filterNot { it == pkg }).take(8)
+        recentApps = updated
+        (application as T1App).prefs.recentApps = updated
+    }
+
+    private fun onHomeDockMeasured(app: LaunchableApp, bounds: Rect) {
+        if (page != Page.Home || !freeform || bounds.width() < 220 || bounds.height() < 220) return
+        if (homeBounds[app.packageName] == bounds) return
+        homeBounds[app.packageName] = Rect(bounds)
+        scheduleHomeDock()
+    }
+
+    private fun scheduleHomeDock() {
+        if (dockScheduled || page != Page.Home || !freeform) return
+        dockScheduled = true
+        dockHandler.postDelayed({
+            dockScheduled = false
+            if (page != Page.Home || !freeform) return@postDelayed
+            val targets = listOfNotNull(
+                AppIndex.find(availableApps, "com.waze"),
+                AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube")
+            )
+            targets.forEach { app ->
+                val bounds = homeBounds[app.packageName] ?: return@forEach
+                if (dockedBounds[app.packageName] == bounds) return@forEach
+                runCatching { HomeAppWindows.dock(this, app.component, bounds) }
+                    .onSuccess { dockedBounds[app.packageName] = Rect(bounds); lastDockAt = SystemClock.elapsedRealtime() }
+                    .onFailure { Log.i("T1Launcher", "home dock ${app.packageName}: ${it.javaClass.simpleName} ${it.message}") }
+            }
+        }, 300L)
+    }
+
+    private fun expandHomeApp(app: LaunchableApp) {
+        expandedPackage = app.packageName
+        runCatching { HomeAppWindows.fullscreen(this, app.component) }
+            .onSuccess { rememberLaunch(app.packageName) }
+            .onFailure {
+                expandedPackage = null
+                Toast.makeText(this, it.message ?: "تعذر تكبير التطبيق", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun navigate(target: Page) {
+        val hadDock = dockedBounds.isNotEmpty()
+        if (target != Page.Home) {
+            dockedBounds.clear()
+            homeBounds.clear()
+        }
+        showWindows = false
+        showButtons = false
+        page = target
+        if (target != Page.Home && hadDock) revealLauncher()
+    }
+
+    private fun revealLauncher() {
+        window.decorView.post {
+            runCatching {
+                LauncherDisplay.start(this, Intent(this, MainActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+        }
+    }
+
+    private fun togglePin(app: LaunchableApp) {
+        val updated = if (app.packageName in pinnedApps) pinnedApps.filterNot { it == app.packageName }
+            else (pinnedApps + app.packageName).take(10)
+        pinnedApps = updated
+        (application as T1App).prefs.pinnedApps = updated
+        Toast.makeText(this, if (app.packageName in updated) "ثُبّت ${app.label} في المفضلة" else "أُزيل ${app.label} من المفضلة", Toast.LENGTH_SHORT).show()
     }
 
     private fun quick(id: String) {
         val app = application as T1App
         when (id) {
             "avm" -> app.car.openAvm()
-            "cluster" -> page = Page.Cluster
+            "cluster" -> navigate(Page.Cluster)
+            "vehicle" -> navigate(Page.Vehicle)
+            "controls" -> navigate(Page.Controls)
+            "apps" -> navigate(Page.Apps)
             "classic" -> classic()
             "hide" -> hideAddons()
             "stock" -> stock()
             "assistant" -> OemAssistant.request(this)
-            "windows" -> showWindows = true
+            "windows" -> { showWindows = true; page = Page.Home; if (dockedBounds.isNotEmpty()) revealLauncher() }
         }
     }
 
@@ -240,22 +429,34 @@ class MainActivity : ComponentActivity() {
             return
         }
         try {
+            val spot = editorSpot ?: ClusterPlacement.Spot.CUSTOM
+            editorSpot = null
+            prefs.setPlacementId(component.packageName, spot.id)
             ClusterLaunch.launch(this, component, prefs.bounds())
-            if (!quiet) Toast.makeText(this, "طُبّق القياس على العدادات", Toast.LENGTH_SHORT).show()
+            if (!quiet) Toast.makeText(this, "أُرسل طلب العرض على العدادات؛ انتظر نتيجة التحقق", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, e.message ?: "تعذّر تغيير القياس", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun clearCluster() {
-        try {
-            ClusterLaunch.clear(this)
-            Toast.makeText(this, "أُزيل التطبيق عن العدادات", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "تعذّرت الإزالة", Toast.LENGTH_LONG).show()
-        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("تطبيقات العدادات")
+            .setMessage("النقل يعيد استخدام نافذة التطبيق قدر الإمكان، وقد يفتح التطبيق إن لم يكن يعمل. الإغلاق القوي معطل ولا يفعّل مالك الجهاز.")
+            .setPositiveButton("نقل المتتبعة للرئيسية") { _, _ ->
+                val result = runCatching { ClusterLaunch.clear(this) }.getOrElse { it.message ?: "تعذر النقل" }
+                android.app.AlertDialog.Builder(this).setMessage(result).setPositiveButton("حسناً", null).show()
+            }
+            .setNeutralButton("إغلاق قوي للتطبيق المحدد") { _, _ ->
+                val pkg = T1Prefs(this).clusterPackage
+                if (pkg !in ClusterLaunch.trackedPackages(this)) {
+                    Toast.makeText(this, "لا يوجد تطبيق طرف ثالث متتبع محدد", Toast.LENGTH_LONG).show()
+                } else ClusterForceClose.close(this, pkg) { message ->
+                    android.app.AlertDialog.Builder(this).setMessage(message).setPositiveButton("حسناً", null).show()
+                }
+            }
+            .setNegativeButton("إلغاء", null).show()
     }
-
     private fun voice() {
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
             Toast.makeText(this, "لا يوجد تعرّف صوت على هذا الجهاز", Toast.LENGTH_LONG).show()

@@ -13,8 +13,8 @@ android {
         applicationId = "com.ghosted907.clusterdiag"
         minSdk = 30
         targetSdk = 30
-        versionCode = 7
-        versionName = "1.6.0"
+        versionCode = 8
+        versionName = "1.7.0"
     }
 
     val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")

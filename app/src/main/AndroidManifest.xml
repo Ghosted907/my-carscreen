@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- Optional so a phone can still install the APK and show the missing-service error. -->
     <uses-feature
         android:name="android.hardware.type.automotive"
@@ -54,6 +56,15 @@
 
         <activity
             android:name=".SaudiClusterActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.ClusterDiag.Cluster" />
+
+        <activity
+            android:name=".LaylNajdActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode"
             android:exported="true"
             android:launchMode="singleTask"

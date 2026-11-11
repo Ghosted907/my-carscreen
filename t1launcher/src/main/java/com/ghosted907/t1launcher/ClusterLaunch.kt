@@ -37,57 +37,68 @@ object ClusterLaunch {
         false
     }
 
+    /** Best-effort Android task reuse, not a guarantee that OEM policy permits reparenting. */
     fun launch(context: Context, component: ComponentName, bounds: Rect) {
+        require(component.packageName != context.packageName) { "لا يمكن وضع اللانشر على العدادات" }
         val display = requireCluster(context)
-        val rect = fit(context, display, bounds)
-        val task = findTask(context, component.packageName, display)
-        if (task != null && task.display == display && resizeTask(task.id, rect)) {
-            remember(context, component)
-            return
-        }
-        if (task != null && (task.display == -1 || task.display == display)) removeTask(task.id)
-        finishOwnTask(context, component.packageName)
-        val intent = Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setComponent(component)
-            .addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TASK
-            )
-        context.startActivity(intent, freeformBundle(display, rect))
+        val intent = reuseIntent(context, component)
+        context.startActivity(intent, freeformBundle(display, fit(context, display, bounds)))
         remember(context, component)
-        Log.i(
-            TAG,
-            "cluster launch ${component.flattenToShortString()} display=$display freeform bounds=${rect.left} ${rect.top} ${rect.right} ${rect.bottom}"
-        )
+        reportLater(context, component.packageName, display)
     }
 
-    /** Moves the last cluster app back to the main screen so the stock gauges show. */
-    fun clear(context: Context) {
-        val prefs = T1Prefs(context)
-        val component = prefs.clusterComponent()
-        ClusterAddonActivity.finishIfRunning()
-        if (component == null) {
-            Log.i(TAG, "cluster clear none")
-            return
+    private fun reuseIntent(context: Context, component: ComponentName): Intent {
+        val intent = context.packageManager.getLaunchIntentForPackage(component.packageName)
+            ?: Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
+        // Replace, do not OR with launcher defaults (which may include CLEAR_TOP).
+        intent.flags = ClusterMovePolicy.REUSE_FLAGS
+        return intent
+    }
+
+    fun moveToMain(context: Context, component: ComponentName) {
+        require(ClusterMovePolicy.mayMoveToMain(component.packageName, context.packageName)) {
+            "لن يُفتح اللانشر أو ثيم العدادات على الشاشة الرئيسية"
         }
-        val display = Displays.clusterId(context)
-        val task = findTask(context, component.packageName, display)
-        if (task != null && (task.display == -1 || display == null || task.display == display)) {
-            removeTask(task.id)
+        val display = Displays.mainId(context) ?: error("لا توجد شاشة رئيسية متصلة")
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(display)
+        context.startActivity(reuseIntent(context, component), options.toBundle())
+        reportLater(context, component.packageName, display)
+    }
+
+    fun trackedPackages(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences("t1", Context.MODE_PRIVATE)
+        return (prefs.getStringSet("clusterPackages", emptySet()).orEmpty() +
+            listOf(prefs.getString("clusterPkg", "").orEmpty()) +
+            prefs.all.keys.filter { it.startsWith("place_") }.map { it.removePrefix("place_") })
+            .filter { ClusterMovePolicy.mayMoveToMain(it, context.packageName) }.toSet()
+    }
+
+    /** The old remove button now requests moving tracked apps home; no privileged removeTask. */
+    fun clear(context: Context): String {
+        if (Displays.clusterId(context) == null) return "لا توجد شاشة عدادات متصلة"
+        val tracked = trackedPackages(context)
+        if (tracked.isEmpty()) return "لا توجد تطبيقات عدادات متتبعة قابلة للنقل"
+        val failures = mutableListOf<String>()
+        tracked.forEach { pkg ->
+            runCatching {
+                val intent = context.packageManager.getLaunchIntentForPackage(pkg) ?: error("لا يوجد مدخل تشغيل")
+                moveToMain(context, intent.component ?: error("مدخل غير محدد"))
+            }.onFailure { failures += pkg }
         }
-        finishOwnTask(context, component.packageName)
-        val intent = Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setComponent(component)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val options = ActivityOptions.makeBasic()
-        options.launchDisplayId = Display.DEFAULT_DISPLAY
-        val bundle = options.toBundle() ?: Bundle()
-        bundle.putInt(KEY_WINDOWING_MODE, WINDOWING_MODE_FULLSCREEN)
-        context.startActivity(intent, bundle)
-        Log.i(TAG, "cluster clear ${component.packageName} -> display 0")
+        return "أُرسل طلب نقل ${tracked.size - failures.size} تطبيق إلى الشاشة الرئيسية دون إزالة المهام. " +
+            "تعذر تأكيد انتقال النوافذ حتى تظهر على الشاشة المطلوبة؛ قد يرفض نظام السيارة النقل أو يفتح التطبيق إذا لم يكن يعمل." +
+            if (failures.isEmpty()) "" else " تعذر إرسال الطلب: ${failures.joinToString("، ")}"
+    }
+
+    private fun reportLater(context: Context, pkg: String, display: Int) {
+        val app = context.applicationContext
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val confirmed = visibleTasks(app).any {
+                (it.baseActivity?.packageName == pkg || it.topActivity?.packageName == pkg) && taskDisplay(it) == display
+            }
+            android.widget.Toast.makeText(app, if (confirmed) "شوهد التطبيق على الشاشة المطلوبة؛ إعادة استخدام نفس المهمة غير مضمونة"
+                else "تعذر تأكيد نقل التطبيق؛ تحقق من الشاشة المطلوبة، قد يمنع أندرويد نقل النافذة", android.widget.Toast.LENGTH_LONG).show()
+        }, 900)
     }
 
     /** Hides the freeform caption on a window in this process. Other apps keep the system bar. */
@@ -156,21 +167,10 @@ object ClusterLaunch {
 
     private fun remember(context: Context, component: ComponentName) {
         val prefs = T1Prefs(context)
+        val storage = context.getSharedPreferences("t1", Context.MODE_PRIVATE)
+        storage.edit().putStringSet("clusterPackages", storage.getStringSet("clusterPackages", emptySet()).orEmpty() + component.packageName).apply()
         prefs.clusterPackage = component.packageName
         prefs.clusterClass = component.className
-    }
-
-    private data class TaskRef(val id: Int, val display: Int)
-
-    private fun findTask(context: Context, packageName: String, clusterDisplay: Int?): TaskRef? {
-        val tasks = visibleTasks(context)
-        val tagged = tasks.map { info ->
-            TaskRef(info.taskId, taskDisplay(info)) to (info.baseActivity?.packageName ?: info.topActivity?.packageName)
-        }.filter { it.second == packageName }
-        val match = tagged.firstOrNull { clusterDisplay != null && it.first.display == clusterDisplay }?.first
-            ?: tagged.firstOrNull()?.first
-        if (match != null) Log.i(TAG, "cluster task ${match.id} display=${match.display}")
-        return match
     }
 
     @Suppress("DEPRECATION")
@@ -184,11 +184,16 @@ object ClusterLaunch {
             val atm = Class.forName("android.app.ActivityTaskManager")
             val service = atm.getMethod("getService").invoke(null)
             val method = service.javaClass.methods.firstOrNull {
-                it.name == "getTasks" && it.parameterTypes.size == 1 &&
-                    it.parameterTypes[0] == Int::class.javaPrimitiveType
+                it.name == "getTasks" && it.parameterTypes.size in 1..4 &&
+                    it.parameterTypes[0] == Int::class.javaPrimitiveType && it.parameterTypes.drop(1).all { type ->
+                        type == Boolean::class.javaPrimitiveType || type == Int::class.javaPrimitiveType
+                    }
             } ?: return@runCatching emptyList()
             @Suppress("UNCHECKED_CAST")
-            method.invoke(service, 40) as? List<ActivityManager.RunningTaskInfo> ?: emptyList()
+            val args = method.parameterTypes.mapIndexed { index, type ->
+                if (index == 0) 100 else if (type == Boolean::class.javaPrimitiveType) false else -1
+            }.toTypedArray()
+            method.invoke(service, *args) as? List<ActivityManager.RunningTaskInfo> ?: emptyList()
         }.getOrElse {
             Log.i(TAG, "cluster getTasks skipped ${root(it).javaClass.simpleName}")
             emptyList()
@@ -204,52 +209,6 @@ object ClusterLaunch {
         } catch (t: Throwable) {
             -1
         }
-    }
-
-    private fun resizeTask(taskId: Int, bounds: Rect): Boolean {
-        return try {
-            val service = taskService() ?: return false
-            val method = service.javaClass.methods.firstOrNull {
-                it.name == "resizeTask" && it.parameterTypes.size == 3
-            } ?: return false
-            method.invoke(service, taskId, bounds, 1)
-            Log.i(TAG, "cluster resize $taskId ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}")
-            true
-        } catch (t: Throwable) {
-            val cause = root(t)
-            Log.i(TAG, "cluster resize denied ${cause.javaClass.simpleName} ${cause.message}")
-            false
-        }
-    }
-
-    private fun removeTask(taskId: Int) {
-        try {
-            val service = taskService() ?: return
-            val method = service.javaClass.methods.firstOrNull {
-                it.name == "removeTask" && it.parameterTypes.size == 1
-            } ?: return
-            method.invoke(service, taskId)
-            Log.i(TAG, "cluster removeTask $taskId")
-        } catch (t: Throwable) {
-            Log.i(TAG, "cluster removeTask skipped ${root(t).javaClass.simpleName}")
-        }
-    }
-
-    private fun finishOwnTask(context: Context, packageName: String) {
-        val manager = context.getSystemService(ActivityManager::class.java) ?: return
-        manager.appTasks.forEach { task ->
-            val info = task.taskInfo
-            val pkg = info.baseActivity?.packageName ?: info.baseIntent?.component?.packageName
-            if (pkg == packageName) {
-                Log.i(TAG, "cluster finish own task ${info.taskId}")
-                task.finishAndRemoveTask()
-            }
-        }
-    }
-
-    private fun taskService(): Any? {
-        val atm = Class.forName("android.app.ActivityTaskManager")
-        return atm.getMethod("getService").invoke(null)
     }
 
     private fun root(error: Throwable): Throwable {

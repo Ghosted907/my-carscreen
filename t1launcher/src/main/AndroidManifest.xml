@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -12,6 +14,8 @@
 
     <queries>
         <package android:name="com.autolink.clusterinteraction" />
+        <package android:name="com.autolink.hmi.carsettings" />
+        <package android:name="com.autolink.miscservice" />
         <package android:name="com.autolink.carservice" />
         <package android:name="com.autolink.app.vehicleservice" />
         <package android:name="com.autolink.app.avm" />
@@ -33,24 +37,28 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.T1">
 
+        <!-- Main UI is display 0 only. No SECONDARY_HOME. Not resizable, so freeform does not park it on the cluster. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:resizeableActivity="true"
+            android:taskAffinity="com.ghosted907.t1launcher.main"
+            android:resizeableActivity="false"
             android:screenOrientation="landscape"
-            android:configChanges="uiMode|orientation|screenSize|screenLayout">
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|density">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Off until the user opts in from Settings. Installing T1 does not replace the OEM home. -->
+        <!-- Optional main-display home. No SECONDARY_HOME, so the cluster does not adopt T1. -->
         <activity-alias
             android:name=".HomeAlias"
             android:enabled="false"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.ghosted907.t1launcher.main"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -62,7 +70,8 @@
         <activity
             android:name=".ClusterAddonActivity"
             android:exported="true"
-            android:resizeableActivity="true"
+            android:resizeableActivity="false"
+            android:taskAffinity="com.ghosted907.t1launcher.main"
             android:theme="@style/Theme.T1.Overlay"
             android:launchMode="singleTask" />
 
@@ -100,6 +109,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
+        </receiver>
+        <!-- Declares capability only; never provisions device owner or activates admin. -->
+        <receiver android:name=".ClusterDeviceAdmin" android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/cluster_device_admin" />
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
         </receiver>
     </application>
 </manifest>

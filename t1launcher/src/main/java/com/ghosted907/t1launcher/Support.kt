@@ -18,6 +18,7 @@ import java.lang.ref.WeakReference
 class ClusterAddonActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (refuseOffMain()) return
         val prefs = T1Prefs(this)
         val enabled = prefs.enabledSlots()
         if (enabled.isEmpty()) {
@@ -39,6 +40,18 @@ class ClusterAddonActivity : Activity() {
         setContentView(root)
         window.decorView.post { ClusterLaunch.hideOwnCaption(window) }
         Log.i("T1Launcher", "addon slots $enabled")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refuseOffMain()
+    }
+
+    private fun refuseOffMain(): Boolean {
+        if (!LauncherDisplay.isOffMain(this)) return false
+        Log.i("T1Launcher", "addon refused display ${display?.displayId}")
+        finish()
+        return true
     }
 
     override fun onDestroy() {
@@ -65,7 +78,8 @@ class T1NotificationListener : NotificationListenerService() {
     }
 
     fun controller(): MediaController? {
-        val token = activeNotifications?.firstNotNullOfOrNull { notification ->
+        val notifications = runCatching { activeNotifications }.getOrNull() ?: return null
+        val token = notifications.firstNotNullOfOrNull { notification ->
             notification.notification.extras.getParcelable<android.media.session.MediaSession.Token>(
                 android.app.Notification.EXTRA_MEDIA_SESSION
             )
@@ -90,7 +104,7 @@ class MediaHub(private val context: android.content.Context) {
     }
 
     fun bind(onState: (State) -> Unit) {
-        val controller = T1NotificationListener.instance?.controller()
+        val controller = runCatching { T1NotificationListener.instance?.controller() }.getOrNull()
         if (controller == null) {
             onState(State(if (allowed()) "لا يوجد مقطع نشط" else "اسمح بالإشعارات للتحكم", false))
             return
@@ -111,7 +125,15 @@ class MediaHub(private val context: android.content.Context) {
 }
 
 class T1TouchService : android.accessibilityservice.AccessibilityService() {
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
+        // Overlay permission is often granted while T1 is in the background.
+        // The next window change is enough to start the edge button if it is not up yet.
+        if (EdgeSwipeService.running) return
+        if (!android.provider.Settings.canDrawOverlays(this)) return
+        val prefs = T1Prefs(this)
+        if (!prefs.edgeEnabled && !prefs.edgeTab) return
+        EdgeSwipeService.arm(this)
+    }
     override fun onInterrupt() {}
 
     override fun onServiceConnected() {
@@ -119,6 +141,7 @@ class T1TouchService : android.accessibilityservice.AccessibilityService() {
         // GestureDescription.Builder.setDisplayId exists only from API 33.
         // On Android 11 a gesture cannot be aimed at display 1.
         Log.i("T1Launcher", "touch service connected; display targeting requires API 33+")
+        EdgeSwipeService.arm(this)
     }
 
     override fun onDestroy() {
@@ -151,9 +174,9 @@ class T1TouchService : android.accessibilityservice.AccessibilityService() {
 class BootReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: android.content.Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        ClusterForceClose.recover(context)
         Log.i("T1Launcher", "boot received")
-        EdgeSwipeService.watch = true
-        EdgeSwipeService.sync(context)
+        EdgeSwipeService.arm(context)
     }
 }
 

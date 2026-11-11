@@ -203,9 +203,43 @@ public final class MainActivity extends AppCompatActivity implements ClusterClie
             @Override
             public void run() {
                 SaudiClusterActivity.finishIfRunning();
+                LaylNajdActivity.finishIfRunning();
                 Log.i(TAG, "cluster close requested");
             }
         });
+        MaterialButton showLayl = findViewById(R.id.buttonLaylShow);
+        MaterialButton previewLayl = findViewById(R.id.buttonLaylPreview);
+        wire(showLayl, "layl show", new Runnable() {
+            @Override
+            public void run() {
+                openLayl(false);
+            }
+        });
+        wire(previewLayl, "layl preview", new Runnable() {
+            @Override
+            public void run() {
+                openLayl(true);
+            }
+        });
+    }
+
+    private void openLayl(boolean preview) {
+        Intent intent = new Intent(this, LaylNajdActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        try {
+            if (preview) {
+                startActivity(intent);
+                Log.i(TAG, "layl preview on this display");
+                return;
+            }
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(1);
+            startActivity(intent, options.toBundle());
+            Log.i(TAG, "layl launch display 1");
+        } catch (RuntimeException e) {
+            Log.i(TAG, "layl launch failed " + e.getClass().getSimpleName() + " " + e.getMessage());
+            appendLog("layl launch failed " + e.getClass().getSimpleName());
+        }
     }
 
     private void openCluster(boolean preview) {

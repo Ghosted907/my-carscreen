@@ -142,6 +142,34 @@
             android:textSize="16sp" />
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonLaylShow"
+            style="@style/Widget.ClusterDiag.SecondaryButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1.4"
+            android:minHeight="64dp"
+            android:text="@string/layl_show"
+            android:textSize="16sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonLaylPreview"
+            style="@style/Widget.ClusterDiag.SecondaryButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="64dp"
+            android:text="@string/layl_preview"
+            android:textSize="16sp" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/textError"
         android:layout_width="match_parent"
