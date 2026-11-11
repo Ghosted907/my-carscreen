@@ -216,7 +216,9 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
         val compact = maxHeight <= 600.dp
         val heroHeight = (maxHeight * .42f).coerceIn(255.dp, 370.dp)
         val dockHeight = (maxHeight * .48f).coerceIn(278.dp, 350.dp)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        // The whole home layout scrolls as one: dragging up lifts the hero, the Waze/YouTube dock and the
+        // favourites together (previously only the lower section had its own scroll and moved alone).
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(9.dp))
                 .background(Color(0xFF101B17))) {
                 Image(painter = androidx.compose.ui.res.painterResource(if (day) R.drawable.oem_t1_day else R.drawable.oem_t1_dark),
@@ -254,7 +256,7 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                 HomeAppTile("YouTube", "الوسائط المرئية", youtube, day, dockEnabled,
                     Modifier.weight(1f), onDockBounds, onExpand)
             }
-            if (!compact) Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            if (!compact) Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HomeQuickTile("MAP", "الملاحة", day, Modifier.weight(1f), onOpenNav)
