@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private val dockHandler = Handler(Looper.getMainLooper())
     private var dockScheduled = false
     private var lastDockAt = 0L
+    private var homeScrolling = false
     private var expandedPackage: String? = null
     private val carListener: (CarBridge.Snap) -> Unit = { snap = it }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -176,7 +177,8 @@ class MainActivity : ComponentActivity() {
                                     AppIndex.find(availableApps, "com.waze"),
                                     AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
                                     { appToDock, bounds -> onHomeDockMeasured(appToDock, bounds) },
-                                    { expandHomeApp(it) }
+                                    { expandHomeApp(it) },
+                                    { onHomeScrolling(it) }
                                 )
                             }
                             Page.Apps -> AppsPage(
@@ -273,18 +275,41 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onHomeDockMeasured(app: LaunchableApp, bounds: Rect) {
-        if (page != Page.Home || !freeform || bounds.width() < 220 || bounds.height() < 220) return
+        if (page != Page.Home || !freeform) return
+        if (bounds.width() < 220 || bounds.height() < 220) {
+            // Slot mostly scrolled away: keep that window hidden behind T1, re-dock the others.
+            homeBounds.remove(app.packageName)
+            if (app.packageName in dockedBounds) hideHomeWindows()
+            scheduleHomeDock()
+            return
+        }
         if (homeBounds[app.packageName] == bounds) return
         homeBounds[app.packageName] = Rect(bounds)
         scheduleHomeDock()
     }
 
+    /**
+     * Another app's freeform task cannot be moved every frame (each move is a new activity start and
+     * some apps, e.g. YouTube, keep drawing at the old place). While the home page scrolls the windows
+     * are hidden behind T1, and re-docked at the settled, clipped slot bounds when scrolling stops.
+     */
+    private fun onHomeScrolling(active: Boolean) {
+        homeScrolling = active
+        if (active) hideHomeWindows() else scheduleHomeDock()
+    }
+
+    private fun hideHomeWindows() {
+        if (dockedBounds.isEmpty()) return
+        dockedBounds.clear()
+        revealLauncher()
+    }
+
     private fun scheduleHomeDock() {
-        if (dockScheduled || page != Page.Home || !freeform) return
+        if (dockScheduled || homeScrolling || page != Page.Home || !freeform) return
         dockScheduled = true
         dockHandler.postDelayed({
             dockScheduled = false
-            if (page != Page.Home || !freeform) return@postDelayed
+            if (homeScrolling || page != Page.Home || !freeform) return@postDelayed
             val targets = listOfNotNull(
                 AppIndex.find(availableApps, "com.waze"),
                 AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube")

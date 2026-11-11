@@ -211,14 +211,19 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
              onDestination: (Boolean) -> Unit,
              onOpenNav: () -> Unit, onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
              dockEnabled: Boolean, waze: LaunchableApp?, youtube: LaunchableApp?,
-             onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+             onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit,
+             onScrolling: (Boolean) -> Unit = {}) {
+    val scroll = rememberScrollState()
+    // Visible part of the page (root coordinates); docked windows are clipped to it.
+    var viewport by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    LaunchedEffect(scroll.isScrollInProgress) { onScrolling(scroll.isScrollInProgress) }
+    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { viewport = it.boundsInRoot() }) {
         val compact = maxHeight <= 600.dp
         val heroHeight = (maxHeight * .42f).coerceIn(255.dp, 370.dp)
         val dockHeight = (maxHeight * .48f).coerceIn(278.dp, 350.dp)
         // The whole home layout scrolls as one: dragging up lifts the hero, the Waze/YouTube dock and the
         // favourites together (previously only the lower section had its own scroll and moved alone).
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(9.dp))
                 .background(Color(0xFF101B17))) {
                 Image(painter = androidx.compose.ui.res.painterResource(if (day) R.drawable.oem_t1_day else R.drawable.oem_t1_dark),
@@ -252,9 +257,9 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
             }
             Row(Modifier.fillMaxWidth().height(dockHeight), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HomeAppTile("Waze", "الملاحة المباشرة", waze, day, dockEnabled,
-                    Modifier.weight(1.2f), onDockBounds, onExpand)
+                    Modifier.weight(1.2f), viewport, onDockBounds, onExpand)
                 HomeAppTile("YouTube", "الوسائط المرئية", youtube, day, dockEnabled,
-                    Modifier.weight(1f), onDockBounds, onExpand)
+                    Modifier.weight(1f), viewport, onDockBounds, onExpand)
             }
             if (!compact) Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -293,6 +298,7 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
 @Composable
 private fun HomeAppTile(title: String, subtitle: String, app: LaunchableApp?, day: Boolean,
                         dockEnabled: Boolean, modifier: Modifier,
+                        viewport: androidx.compose.ui.geometry.Rect?,
                         onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit) {
     val view = LocalView.current
     Column(modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(surface(day))
@@ -314,7 +320,9 @@ private fun HomeAppTile(title: String, subtitle: String, app: LaunchableApp?, da
             .background(if (day) Color(0xFFE9EAD9) else Color(0xFF0B1411))
             .onGloballyPositioned { coordinates ->
                 if (dockEnabled && app != null) {
-                    val root = coordinates.boundsInRoot()
+                    // Clip the slot to the visible page so a window never covers the bars or shortcuts.
+                    val slot = coordinates.boundsInRoot()
+                    val root = viewport?.let { if (slot.overlaps(it)) slot.intersect(it) else androidx.compose.ui.geometry.Rect.Zero } ?: slot
                     val origin = IntArray(2)
                     view.getLocationOnScreen(origin)
                     onDockBounds(app, Rect((origin[0] + root.left).roundToInt(),

@@ -27,7 +27,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-v1.9.1.apk
+adb install -r ..\..\t1launcher-saudi-v1.9.2.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -39,7 +39,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 11, versionName 1.9.1. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 12, versionName 1.9.2. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 ## Home app windows
 
