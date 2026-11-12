@@ -46,6 +46,21 @@ private fun detailGold(day: Boolean) = if (day) Color(0xFF8A6828) else Gold
 private fun fmt(v: Double?, digits: Int = 0): String = v?.let { String.format(Locale.US, "%.${digits}f", it) } ?: "—"
 
 @Composable
+fun DrivingEssentials(day: Boolean, snap: CarBridge.Snap) {
+    val mode = SignalCatalog.byKey.getValue("drive_mode").format(snap.reading("drive_mode").current)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        VehicleMetric("السرعة", "${snap.speed?.toInt() ?: "—"} ${snap.speedUnit}", day)
+        VehicleMetric("الوقود", "${snap.fuel ?: "—"} %", day)
+        VehicleMetric("القير", when (snap.gear) { 1 -> "P"; 2 -> "R"; 3 -> "N"; 4 -> "D"; else -> "—" }, day)
+        VehicleMetric("الحرارة الخارجية", "${fmt(snap.reading("outside_oem").current)} °C", day)
+        VehicleMetric("وضع القيادة", mode, day)
+        VehicleMetric("المدى", "${snap.rangeKm ?: "—"} كم", day)
+        VehicleMetric("دوران المحرك", "${snap.rpm?.toInt() ?: "—"} د/د", day)
+    }
+}
+
+@Composable
 fun MediaLaunchPanel(day: Boolean) {
     val context = LocalContext.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -129,10 +144,11 @@ fun VehicleControlPanel(day: Boolean, snap: CarBridge.Snap) {
                 }
             }
         }
-        val stationary = VehicleCommands.stationary(snap.reading("speed").current, snap.reading("gear").current)
-        // Disabled until the exact OEM start/stop request (not feedback props 2051/2052) is verified.
-        OutlinedButton(enabled = false, onClick = {}, modifier = Modifier.fillMaxWidth()) { Text("الباب الخلفي · غير متاح من اللانشر") }
-        Text(if (!stationary) "يلزم توقف السيارة للتحكم بالباب الخلفي." else "تحكم الباب الخلفي غير متاح حالياً.",
+        OutlinedButton(onClick = { OemSettings.open(context, "tailgate") },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            Text("فتح الشنطة · شاشة جيتور الأصلية")
+        }
+        Text("يفتح زر المصنع الخاص بالشنطة؛ عملية الفتح تتم من شاشة جيتور.",
             color = Gold, fontSize = 12.sp)
         TextButton(onClick = { control.probe { status = it } }) { Text("فحص الاتصال للقراءة فقط") }
         Text(status, color = tone(day), fontSize = 12.sp)

@@ -6,6 +6,7 @@ import android.icu.util.TimeZone as IcuTimeZone
 import android.icu.util.ULocale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -67,20 +68,22 @@ fun HomeDateTime(compact: Boolean, modifier: Modifier = Modifier) {
             .map { if (it in '0'..'9') "٠١٢٣٤٥٦٧٨٩"[it - '0'] else it }.joinToString("")
     }
     val clock = remember(now.time / 1000) { Calendar.getInstance(riyadh).apply { time = now } }
-    val dialSize = if (compact) 230.dp else 300.dp
-    val dateSize = if (compact) 15.sp else 18.sp
+    val dialSize = if (compact) 250.dp else 360.dp
+    val dateSize = if (compact) 16.sp else 22.sp
+    val hijriDateSize = if (compact) 19.sp else 25.sp
     Box(modifier.size(dialSize).background(Color(0xB5081712), CircleShape), contentAlignment = Alignment.Center) {
         Image(androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
             contentDescription = "السيفان والنخلة داخل الساعة",
-            modifier = Modifier.size(if (compact) 56.dp else 72.dp).alpha(.78f))
+            modifier = Modifier.size(if (compact) 60.dp else 86.dp).alpha(.78f))
         Canvas(Modifier.fillMaxSize()) {
+            val scale = if (compact) 1.09f else 1.20f
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension / 2f - 5.dp.toPx()
             val gold = T1Colors.goldSoft
             drawCircle(gold.copy(alpha = .78f), radius, center,
-                style = Stroke(2.dp.toPx()))
+                style = Stroke(2.dp.toPx() * scale))
             drawCircle(gold.copy(alpha = .25f), radius * .87f, center,
-                style = Stroke(1.dp.toPx()))
+                style = Stroke(1.dp.toPx() * scale))
             repeat(60) { i ->
                 val angle = (i * 6.0 - 90.0) * PI / 180.0
                 val inner = radius * if (i % 5 == 0) .78f else .87f
@@ -90,14 +93,14 @@ fun HomeDateTime(compact: Boolean, modifier: Modifier = Modifier) {
                         center.y + sin(angle).toFloat() * inner),
                     Offset(center.x + cos(angle).toFloat() * outer,
                         center.y + sin(angle).toFloat() * outer),
-                    if (i % 5 == 0) 2.dp.toPx() else 1.dp.toPx(), cap = StrokeCap.Round)
+                    if (i % 5 == 0) 2.dp.toPx() * scale else 1.dp.toPx() * scale, cap = StrokeCap.Round)
             }
             fun hand(degrees: Double, length: Float, width: Float, color: Color) {
                 val angle = (degrees - 90.0) * PI / 180.0
                 drawLine(color, center,
                     Offset(center.x + cos(angle).toFloat() * radius * length,
                         center.y + sin(angle).toFloat() * radius * length),
-                    width.dp.toPx(), cap = StrokeCap.Round)
+                    width.dp.toPx() * scale, cap = StrokeCap.Round)
             }
             val seconds = clock.get(Calendar.SECOND).toDouble()
             val minutes = clock.get(Calendar.MINUTE) + seconds / 60.0
@@ -105,14 +108,14 @@ fun HomeDateTime(compact: Boolean, modifier: Modifier = Modifier) {
             hand(hours * 30.0, .42f, 4f, Color.White)
             hand(minutes * 6.0, .61f, 2.5f, gold)
             hand(seconds * 6.0, .67f, 1f, gold.copy(alpha = .75f))
-            drawCircle(gold, 3.dp.toPx(), center)
+            drawCircle(gold, 3.dp.toPx() * scale, center)
         }
         Column(Modifier.align(Alignment.BottomCenter)
-            .padding(bottom = if (compact) 15.dp else 23.dp)
-            .background(Color(0xD4081712), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(bottom = if (compact) 46.dp else 70.dp)
+            .padding(horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$hijri هـ", color = T1Colors.goldSoft, fontSize = dateSize, maxLines = 1)
+            Text("$hijri هـ", color = T1Colors.goldSoft, fontSize = hijriDateSize,
+                fontWeight = FontWeight.Medium, maxLines = 1)
             Text("${date("dd/MM/yyyy", now)} م", color = Color.White, fontSize = dateSize,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif, maxLines = 1)
         }
@@ -127,6 +130,7 @@ fun HomeVehicleTelemetry(day: Boolean, snap: CarBridge.Snap, height: Dp) {
     DisposableEffect(sensors) { sensors.start(); onDispose { sensors.close() } }
     LaunchedEffect(Unit) { while (true) { delay(500); tick = android.os.SystemClock.elapsedRealtime() } }
     val heading = sensors.heading?.live(tick)
+    val tailgate = snap.reading("tailgate_height")
     val fg = if (day) T1Colors.dayText else T1Colors.nightText
     val sub = if (day) T1Colors.dayMuted else T1Colors.nightMuted
     val compact = height < 320.dp
@@ -156,19 +160,22 @@ fun HomeVehicleTelemetry(day: Boolean, snap: CarBridge.Snap, height: Dp) {
                         size = Size(size.width * .84f, size.height * .30f),
                         style = Stroke(1.dp.toPx()))
                 }
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("الشنطة الخلفية", color = fg, fontSize = 13.sp)
-                    Image(androidx.compose.ui.res.painterResource(R.drawable.t1_tailgate_mid_open),
-                        "جيتور T1 والشنطة في طور الفتح", Modifier.weight(1f).fillMaxWidth(.80f),
-                        contentScale = ContentScale.Fit)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {}, enabled = false,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)) { Text("فتح الشنطة", fontSize = 11.sp) }
-                        OutlinedButton(onClick = {}, enabled = false,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)) { Text("إغلاق الشنطة", fontSize = 11.sp) }
+                Image(androidx.compose.ui.res.painterResource(R.drawable.t1_tailgate_mid_open),
+                    "جيتور T1 والشنطة الخلفية مفتوحة جزئياً",
+                    Modifier.fillMaxWidth().fillMaxHeight(.80f).padding(top = 24.dp, bottom = 18.dp),
+                    contentScale = ContentScale.Fit)
+                Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ارتفاع الشنطة الخلفية: ${tailgate.current?.roundToInt()?.let { "$it%" } ?: "—"}",
+                        color = fg, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    if (tailgate.current == null) Text(tailgate.status.label, color = sub, fontSize = 12.sp)
+                }
+                Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.width(165.dp).height(44.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(disabledContentColor = T1Colors.goldSoft.copy(alpha = .75f)),
+                        border = BorderStroke(1.dp, T1Colors.goldSoft.copy(alpha = .55f))) {
+                        Text("فتح الشنطة", fontSize = 16.sp)
                     }
+                    Text("أمر الفتح غير موثق لهذه المركبة", color = sub, fontSize = 11.sp)
                 }
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {

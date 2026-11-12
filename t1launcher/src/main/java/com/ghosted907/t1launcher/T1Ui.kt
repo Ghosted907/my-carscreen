@@ -184,7 +184,11 @@ fun ClusterPage(
 ) {
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val boardHeight = maxHeight
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        SettingsArtBoard(day, Modifier.fillMaxWidth().height(boardHeight))
+        Spacer(Modifier.height(16.dp))
         Text("العدادات", color = text, fontSize = 26.sp)
         Text("تشغيل التطبيق على لوحة العدادات بطريقة JCarTools: setLaunchDisplayId على فهرس الشاشة، بدون نافذة حرة.", color = muted, fontSize = 13.sp)
         JctClusterAppCard(day)
@@ -195,6 +199,7 @@ fun ClusterPage(
             Step("إغلاق تطبيق العدادات") { onClear() }
             Text("ثيم ${snap.theme ?: "--"}  خط ${snap.font ?: "--"}", color = muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.CenterVertically))
         }
+    }
     }
 }
 
@@ -225,18 +230,15 @@ fun SettingsPage(
     onDay: () -> Unit,
     onOverlaySettings: () -> Unit,
     onRecheck: () -> Unit,
-    onButtons: () -> Unit
+    onPermissions: () -> Unit
 ) {
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
-    val line = if (day) T1Colors.dayLine else T1Colors.nightLine
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-    val boardHeight = maxHeight
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsArtBoard(day, Modifier.fillMaxWidth().height(boardHeight))
-        Spacer(Modifier.height(16.dp))
         Text("الإعدادات", color = text, fontSize = 28.sp)
-        SettingsChip("تشغيل التطبيقات · الأزرار العائمة · مناطق الحافة · إخفاء التطبيقات", true, onButtons)
+        SettingsChip(if (day) "الوضع الليلي" else "وضع النهار", true, onDay)
+        SettingsChip("إدارة أذونات اللانشر", false, onPermissions)
+        JctSettingsContent(day)
         RemoteSettingsCard(day)
         if (!overlayOk) {
             Text(
@@ -261,17 +263,6 @@ fun SettingsPage(
             fontSize = 14.sp,
             modifier = Modifier.padding(top = 18.dp)
         )
-        Text(
-            if (day) "الوضع الليلي" else "وضع النهار",
-            color = Color(0xFF123827),
-            modifier = Modifier
-                .padding(top = 12.dp)
-                .background(T1Colors.cyan, RoundedCornerShape(12.dp))
-                .border(1.dp, line, RoundedCornerShape(12.dp))
-                .clickable(onClick = onDay)
-                .padding(16.dp)
-        )
-    }
     }
 }
 

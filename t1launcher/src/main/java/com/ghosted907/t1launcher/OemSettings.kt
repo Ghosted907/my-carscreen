@@ -12,6 +12,7 @@ object OemSettings {
             "steering" -> "com.car.settings.steering.wheel"
             "mirrors" -> "com.car.settings.rear.mirror"
             "windows" -> "com.car.settings.car.windows"
+            "tailgate" -> "com.car.settings.car.tailgate"
             else -> Intent.ACTION_MAIN
         }
         try {

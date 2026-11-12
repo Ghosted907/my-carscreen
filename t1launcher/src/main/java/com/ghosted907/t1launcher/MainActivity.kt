@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -57,9 +58,10 @@ class MainActivity : ComponentActivity() {
     private var toCluster by mutableStateOf(false)
     private var leavingForMainDisplay = false
     private var showWindows by mutableStateOf(false)
-    private var showButtons by mutableStateOf(false)
     private var overlayOk by mutableStateOf(false)
     private var freeform by mutableStateOf(false)
+    private var showPermissionSetup by mutableStateOf(false)
+    private var permissionRevision by mutableIntStateOf(0)
     private var availableApps by mutableStateOf<List<LaunchableApp>>(emptyList())
     private var pinnedApps by mutableStateOf<List<String>>(emptyList())
     private var recentApps by mutableStateOf<List<String>>(emptyList())
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (!ensureMainDisplay()) return
+        permissionRevision++
         availableApps = AppIndex.launchable(this)
         pinnedApps = (application as T1App).prefs.pinnedApps
         recentApps = (application as T1App).prefs.recentApps
@@ -158,8 +161,17 @@ class MainActivity : ComponentActivity() {
         overlayOk = Settings.canDrawOverlays(this)
         freeform = HomeAppWindows.freeformEnabled(this)
         snap = app.car.snap
+        showPermissionSetup = !permissionSetupShown(this)
         setContent {
-            BackHandler(enabled = page != Page.Home || showWindows || showButtons) { if (showButtons) showButtons = false else navigate(Page.Home) }
+            if (showPermissionSetup) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    PermissionSetupPage(day, permissionRevision) {
+                        markPermissionSetupShown(this@MainActivity)
+                        showPermissionSetup = false
+                    }
+                }
+            } else {
+            BackHandler(enabled = page != Page.Home || showWindows) { navigate(Page.Home) }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 T1Shell(
                     page = page,
@@ -183,7 +195,8 @@ class MainActivity : ComponentActivity() {
                                     AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
                                     { appToDock, bounds -> onHomeDockMeasured(appToDock, bounds) },
                                     { expandHomeApp(it) },
-                                    { onHomeScrolling(it) }
+                                    { onHomeScrolling(it) },
+                                    oemApps = availableApps
                                 )
                             }
                             Page.Apps -> AppsPage(
@@ -210,7 +223,7 @@ class MainActivity : ComponentActivity() {
                                 day,
                                 "طبّق الكلاسيكي"
                             ) { classic() }
-                            Page.Settings -> if (showButtons) JctSettingsPage(day) { showButtons = false } else SettingsPage(
+                            Page.Settings -> SettingsPage(
                                 day = day,
                                 overlayOk = overlayOk,
                                 onDay = {
@@ -219,11 +232,12 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOverlaySettings = { openOverlaySettings() },
                                 onRecheck = { refreshEdge() },
-                                onButtons = { showButtons = true }
+                                onPermissions = { showPermissionSetup = true }
                             )
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -346,7 +360,6 @@ class MainActivity : ComponentActivity() {
             homeBounds.clear()
         }
         showWindows = false
-        showButtons = false
         page = target
         if (target != Page.Home && hadDock) revealLauncher()
     }

@@ -6,7 +6,11 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -17,9 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.util.concurrent.Executors
 
 /** Human-readable shortcut name in the selected app language. */
@@ -65,6 +72,38 @@ private fun SwitchRow(label: String, checked: Boolean, day: Boolean, onChange: (
 private fun Note(text: String, day: Boolean) =
     Text(text, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
 
+private data class PickerOption(val label: String, val select: () -> Unit)
+
+/** A wide grid for app and action choices throughout launcher settings. */
+@Composable
+private fun GridPickerDialog(title: String, options: List<PickerOption>, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(.80f).fillMaxHeight(.78f),
+            shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .45f))) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, modifier = Modifier.weight(1f), fontSize = 22.sp)
+                    TextButton(onClick = onDismiss) { Text(tr("إغلاق", "Close")) }
+                }
+                LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 165.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(options) { option ->
+                        OutlinedButton(onClick = option.select,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp),
+                            shape = RoundedCornerShape(10.dp)) {
+                            Text(option.label, textAlign = TextAlign.Center, maxLines = 2,
+                                fontSize = 14.sp, lineHeight = 18.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** Assign one saved launcher shortcut. */
 @Composable
 fun JctActionPicker(label: String, key: String, day: Boolean, onChanged: () -> Unit = {}) {
@@ -85,13 +124,10 @@ private fun ActionDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val context = LocalContext.current
     val items = remember { jctCatalog(context) }
     var split by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(tr("اختر الإجراء", "Select action")) }, text = {
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-            TextButton(onClick = { split = true }) { Text(tr("تقسيم الشاشة بين تطبيقين…", "Split screen between two apps…")) }
-            items.forEach { raw -> TextButton(onClick = { onPick(raw) }) { Text(jctLabel(context, raw)) } }
-        }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text(tr("إغلاق", "Close")) } })
     if (split) SplitDialog(onDismiss = { split = false }) { raw -> split = false; onPick(raw) }
+    else GridPickerDialog(tr("اختر الإجراء", "Select action"),
+        listOf(PickerOption(tr("تقسيم الشاشة بين تطبيقين…", "Split screen between two apps…")) { split = true }) +
+            items.map { raw -> PickerOption(jctLabel(context, raw)) { onPick(raw) } }, onDismiss)
 }
 
 /** Compose a two-app freeform layout from installed applications. */
@@ -124,11 +160,11 @@ private fun SplitDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
             onPick(JctActions.encode(JctAction(JctType.SPLIT, pkg = first, pkg2 = second, orientation = orientation, ratio = ratio)))
         }) { Text(tr("حفظ", "Save")) }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text(tr("إلغاء", "Cancel")) } })
-    if (choosing != 0) AlertDialog(onDismissRequest = { choosing = 0 }, title = { Text(tr("اختر تطبيقًا من القائمة", "Choose an app from the list")) }, text = {
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-            apps.forEach { a -> TextButton(onClick = { if (choosing == 1) first = a.packageName else second = a.packageName; choosing = 0 }) { Text(a.label) } }
-        }
-    }, confirmButton = { TextButton(onClick = { choosing = 0 }) { Text(tr("إغلاق", "Close")) } })
+    if (choosing != 0) GridPickerDialog(tr("اختر تطبيقًا من القائمة", "Choose an app from the list"),
+        apps.map { a -> PickerOption(a.label) {
+            if (choosing == 1) first = a.packageName else second = a.packageName
+            choosing = 0
+        } }, onDismiss = { choosing = 0 })
 }
 
 @Composable
@@ -142,15 +178,24 @@ fun JctSettingsPage(day: Boolean, onBack: () -> Unit) {
                 Button(onClick = onBack) { Text(tr("رجوع", "Back")) }
             }
             Note(tr("اختصارات التطبيقات والشاشات والإيماءات في T1 Launcher.", "App, display, and gesture shortcuts for T1 Launcher."), day)
-            LanguageCard(day)
-            JctClusterAppCard(day)
-            SplitPresetsCard(day)
-            FloatingCard(day)
-            TaskGroupCard(day)
-            ZonesCard(day)
-            BlackScreenCard(day)
-            HideCard(day)
+            JctSettingsContent(day)
         }
+    }
+}
+
+@Composable
+fun JctSettingsContent(day: Boolean) {
+    val context = LocalContext.current
+    val dir = if (JctLang.english(context)) LayoutDirection.Ltr else LayoutDirection.Rtl
+    CompositionLocalProvider(LocalLayoutDirection provides dir) {
+        LanguageCard(day)
+        JctClusterAppCard(day)
+        SplitPresetsCard(day)
+        FloatingCard(day)
+        TaskGroupCard(day)
+        ZonesCard(day)
+        BlackScreenCard(day)
+        HideCard(day)
     }
 }
 
@@ -210,11 +255,10 @@ fun JctClusterAppCard(day: Boolean) {
     }
     if (choose) {
         val apps = remember { AppIndex.launchable(context) }
-        AlertDialog(onDismissRequest = { choose = false }, title = { Text(tr("اختر تطبيقًا من القائمة", "Choose an app from the list")) }, text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                apps.forEach { a -> TextButton(onClick = { pkg = a.packageName; JctStore.putStr(context, JctStore.PKG, pkg); choose = false }) { Text(a.label) } }
-            }
-        }, confirmButton = { TextButton(onClick = { choose = false }) { Text(tr("إغلاق", "Close")) } })
+        GridPickerDialog(tr("اختر تطبيقًا من القائمة", "Choose an app from the list"),
+            apps.map { a -> PickerOption(a.label) {
+                pkg = a.packageName; JctStore.putStr(context, JctStore.PKG, pkg); choose = false
+            } }, onDismiss = { choose = false })
     }
 }
 

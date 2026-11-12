@@ -81,29 +81,40 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
                 DashboardHeader(day, page, snap, onMic, onOemAssistant, onDay)
                 SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
-            DashboardNavigation(page, day, onPage)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    DashboardNavigation(page, day, onPage)
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Box(Modifier.weight(1f).fillMaxHeight()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(54.dp)
+    Column(Modifier.width(88.dp).fillMaxHeight()
         .background(if (day) Color(0xFFE9E6DA) else Color(0xFF07110F))
         .border(width = 1.dp, color = accent(day).copy(alpha = .28f)),
-        verticalAlignment = Alignment.CenterVertically) {
+        horizontalAlignment = Alignment.CenterHorizontally) {
         Page.entries.forEach { item ->
             val selected = item == page
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { onPage(item) }
-                .padding(top = 5.dp, bottom = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween) {
-                Box(Modifier.width(34.dp).height(2.dp)
-                    .background(if (selected) accent(day) else Color.Transparent))
-                DashboardNavIcon(item, if (selected) accent(day) else muted(day))
-                Text(item.ar, color = if (selected) ink(day) else muted(day), fontSize = 11.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+            Box(Modifier.weight(1f).fillMaxWidth()
+                .background(if (selected) accent(day).copy(alpha = .12f) else Color.Transparent)
+                .clickable { onPage(item) }) {
+                Column(Modifier.align(Alignment.Center).padding(horizontal = 3.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    DashboardNavIcon(item, if (selected) accent(day) else muted(day))
+                    Text(item.ar, color = if (selected) ink(day) else muted(day), fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        textAlign = TextAlign.Center, maxLines = 2, lineHeight = 13.sp)
+                }
+                if (selected) Box(Modifier.align(Alignment.CenterEnd).width(3.dp)
+                    .fillMaxHeight(.55f).background(accent(day)))
             }
         }
     }
@@ -228,8 +239,16 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
              onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
              dockEnabled: Boolean, waze: LaunchableApp?, youtube: LaunchableApp?,
              onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit,
-             onScrolling: (Boolean) -> Unit = {}) {
+             onScrolling: (Boolean) -> Unit = {},
+             oemApps: List<LaunchableApp> = emptyList()) {
     val scroll = rememberScrollState()
+    var lampDemo by remember { mutableStateOf(LampDemoMode.NONE) }
+    LaunchedEffect(lampDemo) {
+        if (lampDemo != LampDemoMode.NONE) {
+            delay(20_000)
+            lampDemo = LampDemoMode.NONE
+        }
+    }
     // Visible part of the page (root coordinates); docked windows are clipped to it.
     var viewport by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     LaunchedEffect(scroll.isScrollInProgress) { onScrolling(scroll.isScrollInProgress) }
@@ -243,20 +262,25 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
         Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(4.dp))
                 .background(Color(0xFF101B17))) {
-                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_oem_landscape),
+                Image(painter = androidx.compose.ui.res.painterResource(
+                    if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
                     contentDescription = null, modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -.6f))
                 Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                    listOf(Color(0xE8071711), Color(0xA610251B), Color(0x3610251B)), startX = 0f)))
+                    if (day) listOf(Color(0xCE153322), Color(0x801B422E), Color(0x2610251B))
+                    else listOf(Color(0xE8071711), Color(0xA610251B), Color(0x3610251B)), startX = 0f)))
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                    listOf(Color.Transparent, Color(0x18071913), Color(0xA6081410)))))
-                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
-                    contentDescription = "سيارة جيتور T1", modifier = Modifier.align(Alignment.BottomStart)
-                        .fillMaxWidth(.66f).fillMaxHeight(.96f)
-                        .graphicsLayer(scaleX = if (compact) 1.32f else 1.07f,
-                            scaleY = if (compact) 1.32f else 1.07f,
-                            transformOrigin = TransformOrigin(.5f, .5f)),
-                    contentScale = ContentScale.Fit)
+                    if (day) listOf(Color.Transparent, Color(0x1016291D), Color(0x53122018))
+                    else listOf(Color.Transparent, Color(0x18071913), Color(0xA6081410)))))
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(.66f).fillMaxHeight(.96f)
+                    .graphicsLayer(scaleX = if (compact) 1.32f else 1.07f,
+                        scaleY = if (compact) 1.32f else 1.07f,
+                        transformOrigin = TransformOrigin(.5f, .5f))) {
+                    Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
+                        contentDescription = "سيارة جيتور T1", modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit)
+                    HeroVehicleLights(snap, demoMode = lampDemo)
+                }
                 HomeDateTime(compact, Modifier.align(Alignment.Center)
                     .offset(x = if (compact) 230.dp else 300.dp))
                 Column(Modifier.align(Alignment.CenterEnd).width(335.dp).padding(start = 26.dp, end = 18.dp),
@@ -286,12 +310,14 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                 SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             }
             Row(Modifier.fillMaxWidth().height(dockHeight), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HomeAppTile("Waze", "الملاحة المباشرة", waze, day, dockEnabled,
+                HomeAppTile("مابس", waze, day, dockEnabled,
                     Modifier.weight(1.2f), viewport, onDockBounds, onExpand)
-                HomeAppTile("YouTube", "الوسائط المرئية", youtube, day, dockEnabled,
+                HomeAppTile("يوتيوب", youtube, day, dockEnabled,
                     Modifier.weight(1f), viewport, onDockBounds, onExpand)
             }
+            OemAppShortcuts(day, oemApps)
             HomeVehicleTelemetry(day, snap, telemetryHeight)
+            HomeLampDemo(day, lampDemo) { lampDemo = it }
             if (compact) HomeNoteTile(day, Modifier.fillMaxWidth())
             if (!compact) Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -328,7 +354,38 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
 }
 
 @Composable
-private fun HomeAppTile(title: String, subtitle: String, app: LaunchableApp?, day: Boolean,
+private fun HomeLampDemo(day: Boolean, selected: LampDemoMode,
+                         onSelect: (LampDemoMode) -> Unit) {
+    Column(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("تجربة أنوار صورة السيارة", color = ink(day), fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold)
+        Text("تجربة مرئية لمدة ٢٠ ثانية. لا ترسل أمراً إلى السيارة؛ مسار تشغيل الإشارات والفلشر غير موثّق في ملفات T1.",
+            color = muted(day), fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                "إيقاف التجربة" to LampDemoMode.NONE,
+                "إشارة يسار" to LampDemoMode.LEFT,
+                "إشارة يمين" to LampDemoMode.RIGHT,
+                "فلشر" to LampDemoMode.HAZARD
+            ).forEach { (label, mode) ->
+                val active = selected == mode
+                Box(Modifier.weight(1f).heightIn(min = 52.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) accent(day).copy(alpha = .20f) else surface(day))
+                    .border(1.dp, if (active) accent(day) else accent(day).copy(alpha = .25f),
+                        RoundedCornerShape(8.dp))
+                    .clickable { onSelect(mode) }, contentAlignment = Alignment.Center) {
+                    Text(label, color = if (active) accent(day) else ink(day), fontSize = 14.sp,
+                        textAlign = TextAlign.Center, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeAppTile(title: String, app: LaunchableApp?, day: Boolean,
                         dockEnabled: Boolean, modifier: Modifier,
                         viewport: androidx.compose.ui.geometry.Rect?,
                         onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit) {
@@ -338,12 +395,8 @@ private fun HomeAppTile(title: String, subtitle: String, app: LaunchableApp?, da
         Row(Modifier.fillMaxWidth().height(48.dp).clickable(enabled = app != null) { app?.let(onExpand) }
             .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (app != null) AppArtwork(app)
             Box(Modifier.weight(1f)) {
-                Column {
-                    Text(title, color = ink(day), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text(subtitle, color = muted(day), fontSize = 11.sp)
-                }
+                Text(title, color = accent(day), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             }
             Text("↗  ملء الشاشة", color = accent(day), fontSize = 13.sp)
         }
@@ -444,7 +497,7 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
 }
 
 @Composable
-private fun TailgateGauge(day: Boolean, value: Double?) {
+internal fun TailgateGauge(day: Boolean, value: Double?) {
     val gold = accent(day)
     Box(Modifier.size(165.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
@@ -582,6 +635,8 @@ fun VehiclePage(day: Boolean, snap: CarBridge.Snap, bridge: CarBridge) {
         }
         if (groupName == "OVERVIEW") {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                DrivingEssentials(day, snap)
+                Spacer(Modifier.height(10.dp))
                 VehicleOverview(day, snap)
             }
         } else {

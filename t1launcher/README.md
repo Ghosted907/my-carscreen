@@ -5,6 +5,14 @@ crossed-swords-and-palm emblem and a restrained geometric gold trim. Its display
 the original Jetour screens in `../../../screenshots/original`: a dark, image-led canvas, the vehicle as the
 main visual, slim data labels, three-part window controls, a circular compass, and bottom navigation.
 The home scene uses a clean landscape derived from the original screen and a transparent T1 cutout.
+The main navigation is a vertical rail on the left, with all eight pages stacked top to bottom.
+App and action pickers in Settings now open as wide, scrollable grids, including the floating-button
+and edge-gesture action pickers and the two-app picker.
+On first launch, a permission setup page requests microphone and location access and links to Android's
+overlay, accessibility, notification-listener, usage-access, and battery-background consent screens.
+Every grant is checked again on return, and Settings can reopen the page. Android must grant each
+special access; the launcher cannot grant itself system or OEM privileges.
+Day mode uses a brighter morning panorama with green/gold overlays.
 The vehicle overview places a 3/4 T1 in the center, a portrait top-down T1 with its four tire
 readings on the left, and the compass on the right. The earlier T2-like drivetrain image
 is no longer shown. Tire pressure and temperature sit symmetrically beside the corresponding wheels, with
@@ -21,10 +29,26 @@ The home hero shows a Saudi analog clock with the crossed swords and palm inside
 time drives its hands, and equal-size numeric Gregorian and Arabic-digit Umm al-Qura Hijri dates sit
 at the bottom of the dial. The Riyadh-time greeting and OEM outside-temperature reading remain. A compass,
 four tire pressures and temperatures, and the new half-open-tailgate T1 image sit below the app cards.
-The navigation quick tile is replaced by a saved note. Tailgate open/close buttons are visible but
-disabled: the supplied OEM files identify read-only tailgate feedback, not a verified command route.
-Settings has a full-viewport art board with live text, a complete hue/saturation/brightness picker for
-drawing, and a draggable gold emblem sticker; layers and positions persist locally. The control page's
+The T1 hero headlamps now follow live left/right indicators, hazard, low beam and high beam readings.
+Amber indicators flash around the lamp housings; a white projector stays lit with low beam and grows
+brighter with high beam. Outside the visual test, stale or unavailable readings never light the graphic. The indicator reference
+is `../../../screenshots/اشارات/فليشرpng.png`; actual timing and side mapping require an on-car check.
+The Home page has a 20-second visual test for left, right and hazard lamps. It does not send a vehicle
+command. The available T1 files identify `KeyVehiclePropertyHAZARD` as emergency-brake flashing,
+not the hazard switch, and provide no verified left/right indicator command; these controls must not
+be wired to that unrelated property. The panel labels this distinction clearly.
+The navigation quick tile is replaced by a saved note. The home vehicle panel now shows the
+half-open T1 cutout, the live tailgate height when connected, and a clearly disabled open button.
+The OEM settings APK contains a power-liftgate key (2050), but its accessible command route and
+permissions are not verified on this T1; the launcher does not send an untested motion command.
+The Controls page now has a tailgate button that opens Jetour's exported tailgate settings action
+(`com.car.settings.car.tailgate`) in the original OEM app; the user performs opening there.
+The full-viewport art board is now under **العدادات**. It supports draggable Arabic text with saved
+color and size, drawing with a tappable rainbow strip and hue/saturation/brightness controls, the draggable
+gold emblem, and one imported image sticker from saved files. Both stickers have separate saved size controls.
+JCarTools controls appear directly in
+main Settings without the redundant entry button. **بيانات السيارة** begins with a live driving row
+for speed, fuel, gear, outside temperature, drive mode, range, and RPM. The control page's
 left-side shortcut list has been removed. Long-press an app to pin it ahead of the default shortcuts;
 the Apps page also shows recently launched apps. Apps can open on the main screen or cluster, and
 app launch, floating buttons, edge zones and app hiding follow JCarTools/NaviStart 1.4.1 (see below).
@@ -40,7 +64,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-oem-match-v1.11.0.apk
+adb install -r ..\..\t1launcher-saudi-v1.12.5.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -52,7 +76,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 21, versionName 1.11.0. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 30, versionName 1.12.8. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 1.11.0 merges Codex's 1.10.3-1.10.6 work (home clock and Hijri date, telemetry scene with the half-open tailgate image, Settings art board, control-page shortcut list removed; described above) with the NaviStart 1.11.0 additions (display-routing actions, black screen, recents, play/pause, split screen, Arabic/English app language; see the JCarTools section).
 
@@ -132,4 +156,6 @@ adb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow
 
 Open **التحكم** from the home shortcuts or the bottom navigation. The window, roof, and shade buttons send only the audited commands listed in `VehicleCommands.kt` through the OEM `alcar_service` Binder interface. A command is sent only after a button press. The app reports whether the service accepted the request; actual movement still needs validation on the car.
 
-The tailgate button stays disabled until its exact OEM command is documented. The live speed and gear readings are shown for context, and unverified values are not presented as current readings.
+The direct tailgate motion button on Home stays disabled until its exact OEM command is documented.
+Controls opens the OEM tailgate page instead. The live speed and gear readings are shown for context,
+and unverified values are not presented as current readings.
