@@ -13,17 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 
-/**
- * Port of NaviStart `GestureZoneManager` (d7.b + a7.g case 17 + o0.*), hosted by the
- * accessibility service like NaviStart's MyA11yService:
- *  - up to six transparent windows, WindowManager.LayoutParams(w, h, 2032, 552, -3),
- *    gravity TOP|START; 2032 = TYPE_ACCESSIBILITY_OVERLAY, 552 = NOT_FOCUSABLE|NOT_TOUCH_MODAL|LAYOUT_NO_LIMITS.
- *  - thickness round(32 dp * density); side zones are half the screen height; bottom zones
- *    share the width between the side strips.
- *  - on release, when the accumulated pull (capped at 500 px) is > 90 px, the zone's action
- *    "GestureZoneManager<ZONE>" runs through the common action dispatcher.
- *  - prefs file "gesture_zones", key "enabled_<ZONE>" (default off).
- */
+/** Transparent accessibility overlays for user-assigned inward edge swipes. */
 class JctGestureZones(private val service: AccessibilityService) {
     private val wm = service.getSystemService(WindowManager::class.java)
     private val views = HashMap<JctZone, View>()
@@ -33,7 +23,7 @@ class JctGestureZones(private val service: AccessibilityService) {
         val prefs = prefs(service)
         val enabled = JctZone.values().filter { prefs.getBoolean("enabled_" + it.name, false) }
         if (enabled.isEmpty()) return
-        val t = JctZone.thickness(service.resources.displayMetrics.density)
+        val t = JctZone.thickness(service.resources.displayMetrics.density) * widthPercent(service) / 100
         val m = DisplayMetrics()
         runCatching { @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(m) }
         if (m.widthPixels <= 0 || m.heightPixels <= 0) m.setTo(service.resources.displayMetrics)
@@ -42,20 +32,24 @@ class JctGestureZones(private val service: AccessibilityService) {
 
     private fun add(zone: JctZone, r: JctZone.Rect) {
         val v = ZoneView(service, zone)
-        val p = WindowManager.LayoutParams(r.w, r.h, 2032, 552, PixelFormat.TRANSLUCENT).apply {
+        val p = WindowManager.LayoutParams(r.w, r.h,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT).apply {
             x = maxOf(0, r.x); y = maxOf(0, r.y); gravity = Gravity.TOP or Gravity.START; title = "GestureZone_${zone.name}"
         }
-        var sx = 0f; var sy = 0f; var dist = 0f
+        var sx = 0f; var sy = 0f; var dx = 0f; var dy = 0f
         v.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; dist = 0f; v.feedback(0f) }
+                MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; dx = 0f; dy = 0f; v.feedback(0f) }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = e.rawX - sx; val dy = e.rawY - sy
-                    dist = minOf(Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat(), JctZone.MAX_PULL_PX)
-                    v.feedback(minOf(1f, dist / JctZone.MAX_PULL_PX))
+                    dx = e.rawX - sx; dy = e.rawY - sy
+                    v.feedback((kotlin.math.hypot(dx, dy) / 250f).coerceIn(0f, 1f))
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (dist > JctZone.THRESHOLD_PX) runCatching { JctLaunch.runKey(service, JctStore.ZONE_ACTION + zone.name) }
+                    dx = e.rawX - sx; dy = e.rawY - sy
+                    val threshold = JctZone.THRESHOLD_DP * service.resources.displayMetrics.density * sensitivityPercent(service) / 100f
+                    if (JctZone.fires(zone, dx, dy, threshold)) runCatching { JctLaunch.runKey(service, JctStore.ZONE_ACTION + zone.name) }
                     v.feedback(-1f)
                 }
                 MotionEvent.ACTION_CANCEL -> v.feedback(-1f)
@@ -70,7 +64,7 @@ class JctGestureZones(private val service: AccessibilityService) {
         views.clear()
     }
 
-    /** Own drawing; NaviStart's o0.d artwork is not copied. */
+    /** Small feedback flash while a shortcut is pulled. */
     private class ZoneView(context: Context, val zone: JctZone) : View(context) {
         private var level = -1f
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D4A84B") }
@@ -85,7 +79,18 @@ class JctGestureZones(private val service: AccessibilityService) {
 
     companion object {
         const val FILE = "gesture_zones"
+        private const val WIDTH = "strip_width_percent"
+        private const val SENSITIVITY = "swipe_distance_percent"
         fun prefs(c: Context) = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        fun widthPercent(c: Context) = prefs(c).getInt(WIDTH, 100).coerceIn(75, 150)
+        fun sensitivityPercent(c: Context) = prefs(c).getInt(SENSITIVITY, 100).coerceIn(75, 150)
+        fun setWidthPercent(c: Context, value: Int) {
+            prefs(c).edit().putInt(WIDTH, value.coerceIn(75, 150)).apply()
+            T1TouchService.instance?.zones?.refresh()
+        }
+        fun setSensitivityPercent(c: Context, value: Int) {
+            prefs(c).edit().putInt(SENSITIVITY, value.coerceIn(75, 150)).apply()
+        }
         fun setEnabled(c: Context, z: JctZone, on: Boolean) {
             prefs(c).edit().putBoolean("enabled_" + z.name, on).apply()
             T1TouchService.instance?.zones?.refresh()

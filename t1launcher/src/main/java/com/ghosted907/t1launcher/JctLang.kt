@@ -8,12 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 
-/**
- * Port of NaviStart `e0.b0` application language (setting "setLangApp" / "AppLangDefault").
- * Same key "app_language" and the same "system" value; NaviStart applies the choice by giving the
- * activity a Configuration with that Locale (b0.b, p2.e / j0.e attachBaseContext wrapping).
- * T1 is Arabic-first, so the default is "ar" instead of NaviStart's Locale.getDefault().
- */
+/** Language selection for T1's bilingual launcher controls. */
 object JctLang {
     const val KEY = "app_language"
     const val SYSTEM = "system"
@@ -25,7 +20,7 @@ object JctLang {
     fun saved(context: Context): String =
         context.getSharedPreferences(JctStore.FILE, Context.MODE_PRIVATE).getString(KEY, AR) ?: AR
 
-    /** b0.a(): the effective language code. */
+    /** Resolve the system option to the current device language. */
     fun language(context: Context): String {
         val s = saved(context)
         return if (s == SYSTEM) Resources.getSystem().configuration.locales[0].language else s
@@ -34,7 +29,7 @@ object JctLang {
     /** Only Arabic and English text exist; any other system language falls back to English. */
     fun english(context: Context): Boolean = language(context) != AR
 
-    /** attachBaseContext wrapper: the activity's Configuration carries the chosen Locale. */
+    /** Apply the choice to Android resources before the activity is created. */
     fun wrap(base: Context): Context {
         val locale = Locale(if (english(base)) EN else AR)
         val config = Configuration(base.resources.configuration)
@@ -42,7 +37,7 @@ object JctLang {
         return base.createConfigurationContext(config)
     }
 
-    /** b0.b(): save and re-apply. */
+    /** Save the choice and redraw the activity. */
     fun set(activity: Activity, value: String) {
         activity.getSharedPreferences(JctStore.FILE, Context.MODE_PRIVATE).edit().putString(KEY, value).apply()
         activity.recreate()

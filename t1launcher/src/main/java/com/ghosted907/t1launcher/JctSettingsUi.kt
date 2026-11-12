@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.concurrent.Executors
 
-/** Action label as NaviStart's spinner shows it (j0.e.toString), in the app language. */
+/** Human-readable shortcut name in the selected app language. */
 fun jctLabel(context: Context, raw: String): String {
     val en = JctLang.english(context)
     val a = JctActions.parse(raw)
@@ -37,7 +37,7 @@ fun jctLabel(context: Context, raw: String): String {
 private fun appLabel(context: Context, pkg: String?): String =
     runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg!!, 0)).toString() }.getOrDefault(pkg ?: "")
 
-/** j0.c.d: enum actions, profiles, then every launchable app. */
+/** Actions available to launcher buttons and gestures. */
 fun jctCatalog(context: Context): List<String> =
     JctEnum.values().map { JctActions.ENUM + it.name } +
         listOf(JctActions.PROFILE + JctLaunch.PROFILE_TASKS) +
@@ -45,7 +45,6 @@ fun jctCatalog(context: Context): List<String> =
 
 @Composable
 private fun Card(title: String, day: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    // NaviStart: full-width cards, 15 dp corners, stacked vertically.
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(15.dp))
         .background(if (day) T1Colors.dayCard else T1Colors.nightCard).padding(16.dp)) {
         Text(title, color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 19.sp)
@@ -66,7 +65,7 @@ private fun SwitchRow(label: String, checked: Boolean, day: Boolean, onChange: (
 private fun Note(text: String, day: Boolean) =
     Text(text, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
 
-/** Spinner bound to one action key (j0.c.j). */
+/** Assign one saved launcher shortcut. */
 @Composable
 fun JctActionPicker(label: String, key: String, day: Boolean, onChanged: () -> Unit = {}) {
     val context = LocalContext.current
@@ -95,7 +94,7 @@ private fun ActionDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     if (split) SplitDialog(onDismiss = { split = false }) { raw -> split = false; onPick(raw) }
 }
 
-/** fragment_apps2.xml: two apps, horizontal/vertical, 30:70 / 50:50 / 70:30. Builds "split:a,b,o,r". */
+/** Compose a two-app freeform layout from installed applications. */
 @Composable
 private fun SplitDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val context = LocalContext.current
@@ -142,9 +141,10 @@ fun JctSettingsPage(day: Boolean, onBack: () -> Unit) {
                 Text(tr("تشغيل التطبيقات والتحكم المريح", "App launch and quick controls"), color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 24.sp, modifier = Modifier.weight(1f))
                 Button(onClick = onBack) { Text(tr("رجوع", "Back")) }
             }
-            Note(tr("منقول من JCarTools (NaviStart 1.4.1) بنفس الآلية.", "Ported from JCarTools (NaviStart 1.4.1) with the same method."), day)
+            Note(tr("اختصارات التطبيقات والشاشات والإيماءات في T1 Launcher.", "App, display, and gesture shortcuts for T1 Launcher."), day)
             LanguageCard(day)
             JctClusterAppCard(day)
+            SplitPresetsCard(day)
             FloatingCard(day)
             TaskGroupCard(day)
             ZonesCard(day)
@@ -154,7 +154,6 @@ fun JctSettingsPage(day: Boolean, onBack: () -> Unit) {
     }
 }
 
-/** NaviStart "setLangApp": العربية / English / as in the system (e0.b0). */
 @Composable
 private fun LanguageCard(day: Boolean) {
     val context = LocalContext.current
@@ -167,12 +166,11 @@ private fun LanguageCard(day: Boolean) {
                 else OutlinedButton(onClick = { (context as? Activity)?.let { JctLang.set(it, v) } }) { Text(JctLang.label(v, en)) }
             }
         }
-        Note(tr("تتغير لغة هذه الصفحة وأسماء الإجراءات والرسائل المنقولة من JCarTools، ولغة الإعداد التي يمررها T1 لأندرويد. باقي الواجهة عربية حاليًا.",
-            "Changes this page, action names and JCarTools-port messages, and the locale T1 passes to Android. The rest of the launcher is still Arabic."), day)
+        Note(tr("تتغير لغة هذه الصفحة ورسائل اختصارات التطبيقات. بقيّة الواجهة عربية حاليًا.",
+            "Changes this page and shortcut messages. The rest of the launcher is still Arabic."), day)
     }
 }
 
-/** main_startpropri.xml: package field + app list + launch buttons + auto-start switch. */
 @Composable
 fun JctClusterAppCard(day: Boolean) {
     val context = LocalContext.current
@@ -186,19 +184,19 @@ fun JctClusterAppCard(day: Boolean) {
         OutlinedTextField(value = pkg, onValueChange = { pkg = it.trim() }, singleLine = true, label = { Text(tr("الحزمة", "Package")) }, modifier = Modifier.fillMaxWidth())
         OutlinedButton(onClick = { choose = true }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("اختر تطبيقًا من القائمة", "Choose an app from the list")) }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = { JctLaunch.runPkgOn(context, pkg, cluster = true); area = JctStore.AREA_PRI }) { Text(tr("تشغيل على لوحة العدادات", "Start on dashboard")) }
-            Button(onClick = { JctLaunch.runPkgOn(context, pkg, cluster = false); area = JctStore.AREA_GU }) { Text(tr("تشغيل على الجهاز اللوحي", "Start on tablet")) }
+            Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = true)) area = JctStore.AREA_PRI else launchError(context) }) { Text(tr("افتح على العدادات", "Open on cluster")) }
+            Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = false)) area = JctStore.AREA_GU else launchError(context) }) { Text(tr("افتح على الشاشة الرئيسية", "Open on main screen")) }
             OutlinedButton(onClick = {
                 val toCluster = JctStore.int(context, JctStore.PKG_AREA, JctStore.AREA_GU) != JctStore.AREA_PRI
-                JctLaunch.runPkgOn(context, pkg, cluster = toCluster); area = if (toCluster) JctStore.AREA_PRI else JctStore.AREA_GU
-            }) { Text(tr("تبديل بين الشاشتين", "Switch displays")) }
+                if (JctLaunch.runPkgOn(context, pkg, cluster = toCluster)) area = if (toCluster) JctStore.AREA_PRI else JctStore.AREA_GU else launchError(context)
+            }, enabled = pkg.isNotBlank()) { Text(tr("انقل للشاشة الأخرى", "Move to other screen")) }
         }
         Note(when (area) {
             JctStore.AREA_PRI -> tr("آخر وجهة: لوحة العدادات", "Last destination: cluster")
             JctStore.AREA_GU -> tr("آخر وجهة: الجهاز اللوحي", "Last destination: head unit")
             else -> tr("لم يُرسل التطبيق بعد", "Not sent yet")
         }, day)
-        SwitchRow(tr("تشغيل التطبيق تلقائيًا على لوحة العدادات عند تشغيل السيارة", "Auto-start the app on the cluster when the car starts"), boot, day) {
+        SwitchRow(tr("تشغيل التطبيق تلقائيًا على العدادات عند تشغيل السيارة", "Open on cluster at startup"), boot, day) {
             boot = it; JctStore.putBool(context, JctStore.BOOT, it); JctStore.putStr(context, JctStore.PKG, pkg)
         }
         Note(tr("الشاشات (فهرس getDisplays):\n", "Displays (getDisplays index):\n") + JctLaunch.describe(context), day)
@@ -223,6 +221,45 @@ fun JctClusterAppCard(day: Boolean) {
 private fun cycle(context: Context, cur: Int): Int {
     val n = JctLaunch.displays(context).size
     return if (cur + 1 >= n) -1 else cur + 1
+}
+
+private fun launchError(context: Context) {
+    android.widget.Toast.makeText(context, tr(context,
+        "تعذّر فتح التطبيق على الشاشة المحددة. راجع التطبيق وفهرس الشاشة.",
+        "Could not open the app on that display. Check the app and display index."), android.widget.Toast.LENGTH_LONG).show()
+}
+
+/** Three reusable layouts keep common app pairs one tap away. */
+@Composable
+private fun SplitPresetsCard(day: Boolean) {
+    val context = LocalContext.current
+    val keys = remember { (1..3).map { "split_preset_$it" } }
+    val presets = remember { mutableStateListOf<String>().apply { addAll(keys.map { JctStore.str(context, it, "") }) } }
+    var editing by remember { mutableIntStateOf(-1) }
+    Card(tr("تخطيطات تطبيقين", "Two-app layouts"), day) {
+        Note(tr("احفظ أزواج التطبيقات التي تستخدمها كثيرًا. تتطلب النوافذ الحرة في النظام.",
+            "Save frequent app pairs. System freeform windows must be enabled."), day)
+        keys.forEachIndexed { index, key ->
+            val action = JctActions.parse(presets[index])
+            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                Note(tr("تخطيط ", "Layout ") + (index + 1) + ": " +
+                    if (action.type == JctType.SPLIT) jctLabel(context, presets[index]) else tr("غير محفوظ", "Empty"), day)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { editing = index }) { Text(tr("إعداد", "Set up")) }
+                    Button(enabled = action.type == JctType.SPLIT, onClick = { JctLaunch.runSplit(context, action) }) { Text(tr("افتح", "Open")) }
+                    TextButton(enabled = action.type == JctType.SPLIT, onClick = {
+                        presets[index] = ""; JctStore.putStr(context, key, "")
+                    }) { Text(tr("مسح", "Clear")) }
+                }
+            }
+        }
+    }
+    if (editing >= 0) SplitDialog(onDismiss = { editing = -1 }) { raw ->
+        val index = editing
+        presets[index] = raw
+        JctStore.putStr(context, keys[index], raw)
+        editing = -1
+    }
 }
 
 @Composable
@@ -272,11 +309,17 @@ private fun TaskGroupCard(day: Boolean) {
         tasks.forEachIndexed { i, t ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${i + 1}.", color = if (day) T1Colors.dayText else T1Colors.nightText)
+                Checkbox(checked = t.enabled, onCheckedChange = { enabled ->
+                    save(tasks.mapIndexed { j, item -> if (j == i) item.copy(enabled = enabled) else item })
+                })
                 OutlinedButton(onClick = { pickFor = i }, modifier = Modifier.weight(1f).padding(horizontal = 6.dp)) { Text(jctLabel(context, t.action), maxLines = 1) }
                 TextButton(enabled = i > 0, onClick = { save(tasks.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }) { Text("▲") }
+                TextButton(enabled = i < tasks.lastIndex, onClick = { save(tasks.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }) { Text("▼") }
                 TextButton(onClick = { save(tasks.filterIndexed { j, _ -> j != i }) }) { Text(tr("حذف", "Delete")) }
             }
         }
+        Note(tr("علامة الاختيار تحدد الأوامر التي ستعمل. الترتيب من أعلى إلى أسفل.",
+            "Checked commands run from top to bottom."), day)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { save(tasks + JctLaunch.Task("", true, false, JctActions.NOT_VALUE)); pickFor = tasks.size - 1 }) { Text(tr("إضافة أمر", "Add command")) }
             OutlinedButton(onClick = { JctLaunch.runTaskGroup(context, JctStore.TASKS) }) { Text(tr("تجربة الآن", "Test now")) }
@@ -292,12 +335,21 @@ private fun ZonesCard(day: Boolean) {
     val context = LocalContext.current
     val a11y = T1TouchService.instance != null
     val en = JctLang.english(context)
+    var width by remember { mutableIntStateOf(JctGestureZones.widthPercent(context)) }
+    var sensitivity by remember { mutableIntStateOf(JctGestureZones.sensitivityPercent(context)) }
     Card(tr("إعداد السحب من حافة الشاشة", "Configure edge swipe"), day) {
         if (!a11y) {
             Note(tr("يحتاج تفعيل خدمة إمكانية الوصول «T1 remote touch».", "Needs the \"T1 remote touch\" accessibility service."), day)
             TextButton(onClick = { runCatching { LauncherDisplay.start(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } }) { Text(tr("فتح إعدادات إمكانية الوصول", "Open accessibility settings")) }
         }
-        Note(tr("قد تتعارض المناطق مع إيماءات النظام. اسحب أكثر من 90 بكسل نحو الداخل.", "Zones may conflict with system gestures. Swipe inward more than 90 px."), day)
+        Note(tr("اسحب نحو داخل الشاشة. فعّل المناطق التي تحتاجها فقط لتقليل التعارض مع إيماءات النظام.",
+            "Swipe into the screen. Enable only the edges you need to avoid system gesture conflicts."), day)
+        Note(tr("عرض منطقة السحب: ", "Edge width: ") + "$width%", day)
+        Slider(value = width.toFloat(), onValueChange = { width = it.toInt() }, valueRange = 75f..150f,
+            onValueChangeFinished = { JctGestureZones.setWidthPercent(context, width) })
+        Note(tr("مسافة التفعيل: ", "Swipe distance: ") + "$sensitivity%", day)
+        Slider(value = sensitivity.toFloat(), onValueChange = { sensitivity = it.toInt() }, valueRange = 75f..150f,
+            onValueChangeFinished = { JctGestureZones.setSensitivityPercent(context, sensitivity) })
         JctZone.values().forEach { z ->
             var on by remember(z) { mutableStateOf(JctGestureZones.enabled(context, z)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,15 +360,18 @@ private fun ZonesCard(day: Boolean) {
     }
 }
 
-/** NaviStart black screen (blackactivity.xml): clock on/off and brightness, plus a test button. */
 @Composable
 private fun BlackScreenCard(day: Boolean) {
     val context = LocalContext.current
     var clock by remember { mutableStateOf(JctStore.bool(context, JctBlackActivity.KEY_CLOCK, true)) }
+    var clock24 by remember { mutableStateOf(JctStore.bool(context, JctBlackActivity.KEY_CLOCK_24, true)) }
     var bright by remember { mutableIntStateOf(JctStore.int(context, JctBlackActivity.KEY_BRIGHTNESS, 10)) }
     Card(tr("شاشة سوداء", "Black screen"), day) {
         Note(tr("تُفتح من أي زر أو منطقة سحب بالإجراء «شاشة سوداء». المس الشاشة للخروج.", "Opened by any button or edge zone set to \"Black screen\". Tap to exit."), day)
         SwitchRow(tr("عرض الساعة", "Show clock"), clock, day) { clock = it; JctStore.putBool(context, JctBlackActivity.KEY_CLOCK, it) }
+        if (clock) SwitchRow(tr("الوقت بنظام 24 ساعة", "24-hour time"), clock24, day) {
+            clock24 = it; JctStore.putBool(context, JctBlackActivity.KEY_CLOCK_24, it)
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Note(tr("السطوع: ", "Brightness: ") + "$bright%", day)
             TextButton(onClick = { bright = (bright - 5).coerceIn(1, 100); JctStore.putInt(context, JctBlackActivity.KEY_BRIGHTNESS, bright) }) { Text("−") }

@@ -1,28 +1,15 @@
 package com.ghosted907.t1launcher
 
-/**
- * Port of JCarTools / NaviStart 1.4.1 action model (`j0.d`, `j0.e`, `j0.f`).
- * One action string is stored per trigger key, exactly like NaviStart:
- *   "enum:<NAME>"                 built-in action (n0.d)
- *   "app:<package>"               launch app (getLaunchIntentForPackage + setLaunchDisplayId)
- *   "split:<a>,<b>,<orient>,<ratio>" split pair (parsed and stored only, see JctLaunch)
- *   "profile:<id>"                task group / profile
- * Unknown or empty strings fall back to "enum:Not_value".
- */
+/** Saved launcher shortcuts. Prefixes remain readable for settings saved by earlier releases. */
 enum class JctType { ENUM, APP, SPLIT, CUSTOM_CMD }
 
-/**
- * Subset of NaviStart `n0.d` built-in actions whose behaviour is confirmed in the
- * recovered Java (`e0.z.e`, `a7.g` case 14) and can run inside this launcher.
- * [code] is NaviStart's own action code.
- */
+/** Numeric display codes are kept for interoperability; labels describe this launcher's actions. */
 enum class JctEnum(val code: Int, val labelAr: String, val labelEn: String) {
     Not_value(0, "غير محدد", "Not specified"),
-    // 1.11.0: NaviStart n0.d display-routing actions (codes 1, 6, 9) and black screen (2).
-    GO_TO_PP(1, "عرض التطبيق على لوحة العدادات", "Show app on instrument cluster"),
-    RUN_BLACK(2, "شاشة سوداء", "Black screen"),
-    GO_TO_GU(6, "عرض التطبيق على وحدة الرأس", "Show app on head unit"),
-    TOGGLE_GU_PP(9, "تبديل التطبيق بين وحدة الرأس/لوحة العدادات", "Switch app between head unit and cluster"),
+    GO_TO_PP(1, "افتح التطبيق المختار على العدادات", "Open chosen app on cluster"),
+    RUN_BLACK(2, "وضع الشاشة الداكنة", "Dark screen mode"),
+    GO_TO_GU(6, "افتح التطبيق المختار على الشاشة الرئيسية", "Open chosen app on main screen"),
+    TOGGLE_GU_PP(9, "انقل التطبيق المختار للشاشة الأخرى", "Move chosen app to other screen"),
     RUN_START_APP_MENU(7, "قائمة تشغيل التطبيقات المثبتة", "Launch installed apps menu"),
     GLOBAL_BACK(8, "رجوع", "Global back button"),
     GLOBAL_HOME(18, "الشاشة الرئيسية", "Global Home button"),
@@ -30,7 +17,6 @@ enum class JctEnum(val code: Int, val labelAr: String, val labelEn: String) {
     MEDIA_PAUSE(15, "إيقاف الوسائط مؤقتًا", "Media pause"),
     MEDIA_NEXT(16, "المسار التالي", "Media next track"),
     MEDIA_BLACK(17, "المسار السابق", "Media previous track"),
-    // 1.11.0: NaviStart n0.d codes 74 and 75.
     RECENT_TASK_MANAGER(74, "مدير التطبيقات الأخيرة", "Recent apps manager"),
     MEDIA_PLAY_PAUSE(75, "تشغيل/إيقاف الوسائط مؤقتًا", "Media play/pause");
 
@@ -63,7 +49,6 @@ object JctActions {
     const val PROFILE = "profile:"
     const val NOT_VALUE = "enum:Not_value"
 
-    /** j0.f.b */
     fun parse(raw: String?): JctAction {
         if (raw == null) return JctAction.NOT_VALUE
         val s = raw.trim()
@@ -83,7 +68,6 @@ object JctActions {
     private fun enumOf(name: String): JctAction =
         JctAction(JctType.ENUM, JctEnum.byName(name) ?: JctEnum.Not_value)
 
-    /** j0.f.c / j0.e.e: orientation 2 or 1, ratio 30/70 else 50. */
     private fun split(body: String): JctAction {
         val parts = body.split(",")
         if (parts.size < 3) return JctAction.NOT_VALUE
@@ -95,7 +79,6 @@ object JctActions {
             orientation = if (orient != 2) 1 else 2, ratio = if (ratio != 30 && ratio != 70) 50 else ratio)
     }
 
-    /** j0.f.f */
     fun encode(action: JctAction?): String {
         if (action == null) return NOT_VALUE
         return when (action.type) {
@@ -110,7 +93,6 @@ object JctActions {
         }
     }
 
-    /** j0.f.d: is the action runnable/assigned. */
     fun valid(action: JctAction?): Boolean = when (action?.type) {
         null -> false
         JctType.APP -> action.pkg != null
@@ -121,8 +103,7 @@ object JctActions {
 }
 
 /**
- * Split-pair geometry for "split:<a>,<b>,<orient>,<ratio>" (fragment_apps2.xml: horizontal/vertical,
- * 30:70 / 50:50 / 70:30). orientation 1 = side by side, 2 = stacked; ratio = first app's share.
+ * Split-pair geometry. Orientation 1 = side by side, 2 = stacked; ratio = first app's share.
  * Returns the two window rects as [x, y, w, h].
  */
 object JctSplit {
@@ -138,7 +119,7 @@ object JctSplit {
     }
 }
 
-/** NaviStart six edge zones (o0.f) and their geometry (a7.g case 17). */
+/** Six launcher edge shortcuts, arranged around the usable display boundary. */
 enum class JctZone(val labelAr: String, val labelEn: String) {
     LEFT_TOP("يسار أعلى", "Left top"), LEFT_BOTTOM("يسار أسفل", "Left bottom"), RIGHT_TOP("يمين أعلى", "Right top"),
     RIGHT_BOTTOM("يمين أسفل", "Right bottom"), BOTTOM_LEFT("أسفل يسار", "Bottom left"), BOTTOM_RIGHT("أسفل يمين", "Bottom right");
@@ -148,13 +129,11 @@ enum class JctZone(val labelAr: String, val labelEn: String) {
     data class Rect(val x: Int, val y: Int, val w: Int, val h: Int)
 
     companion object {
-        const val THICKNESS_DP = 32f
-        const val THRESHOLD_PX = 90f
-        const val MAX_PULL_PX = 500f
+        const val THICKNESS_DP = 24f
+        const val THRESHOLD_DP = 72f
 
         fun thickness(density: Float): Int = maxOf(1, Math.round(THICKNESS_DP * density))
 
-        /** Exactly the arithmetic of a7.g case 17; null when NaviStart would skip the zone. */
         fun geometry(zone: JctZone, width: Int, height: Int, t: Int): Rect? {
             val half = height / 2
             val bottomY = height - t
@@ -171,8 +150,11 @@ enum class JctZone(val labelAr: String, val labelEn: String) {
             }?.takeIf { it.w > 0 && it.h > 0 }
         }
 
-        /** o0.b touch listener: distance capped at 500, fires above 90 px. */
-        fun fires(dx: Float, dy: Float): Boolean =
-            minOf(Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat(), MAX_PULL_PX) > THRESHOLD_PX
+        /** A deliberate inward stroke avoids accidental taps and outward system gestures. */
+        fun fires(zone: JctZone, dx: Float, dy: Float, threshold: Float): Boolean = when (zone) {
+            LEFT_TOP, LEFT_BOTTOM -> dx >= threshold && kotlin.math.abs(dx) > kotlin.math.abs(dy)
+            RIGHT_TOP, RIGHT_BOTTOM -> -dx >= threshold && kotlin.math.abs(dx) > kotlin.math.abs(dy)
+            BOTTOM_LEFT, BOTTOM_RIGHT -> -dy >= threshold && kotlin.math.abs(dy) > kotlin.math.abs(dx)
+        }
     }
 }

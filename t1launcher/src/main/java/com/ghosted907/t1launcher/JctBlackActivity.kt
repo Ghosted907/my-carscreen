@@ -9,12 +9,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextClock
 
-/**
- * Port of NaviStart `BlackActivity` for action CarRunApp_RUN_BLACK (code 2): a black screen started
- * with setLaunchDisplayId on the chosen display. Optional dim clock ("black_clock", default on) and
- * low window brightness ("black_brightness" percent, default 10). Any tap closes it.
- * The AppWidgetHost / HTML screens of NaviStart's black screen are not ported.
- */
+/** A dim, distraction-free screen with an optional clock. Tap anywhere to exit. */
 class JctBlackActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,7 +23,8 @@ class JctBlackActivity : Activity() {
         }
         if (JctStore.bool(this, KEY_CLOCK, true)) {
             root.addView(TextClock(this).apply {
-                format24Hour = "HH:mm"; format12Hour = "HH:mm"
+                format24Hour = "HH:mm"
+                format12Hour = if (JctStore.bool(this@JctBlackActivity, KEY_CLOCK_24, true)) "HH:mm" else "h:mm a"
                 setTextColor(Color.rgb(70, 78, 74))
                 textSize = 96f
                 textDirection = View.TEXT_DIRECTION_LTR
@@ -42,6 +38,7 @@ class JctBlackActivity : Activity() {
 
     companion object {
         const val KEY_CLOCK = "black_clock"
+        const val KEY_CLOCK_24 = "black_clock_24"
         const val KEY_BRIGHTNESS = "black_brightness"
     }
 }

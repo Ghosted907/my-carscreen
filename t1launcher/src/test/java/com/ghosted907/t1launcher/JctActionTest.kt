@@ -31,27 +31,29 @@ class JctActionTest {
         assertTrue(JctActions.valid(JctActions.parse("app:x.y")))
     }
 
-    @Test fun zoneGeometryMatchesNaviStart() {
+    @Test fun zoneGeometryKeepsCornersSeparate() {
         val t = JctZone.thickness(1.33f)
-        assertEquals(43, t)
-        assertEquals(JctZone.Rect(0, 0, 43, 540), JctZone.geometry(JctZone.LEFT_TOP, 1920, 1080, t))
-        assertEquals(JctZone.Rect(1877, 540, 43, 540), JctZone.geometry(JctZone.RIGHT_BOTTOM, 1920, 1080, t))
-        assertEquals(JctZone.Rect(43, 1037, 917, 43), JctZone.geometry(JctZone.BOTTOM_LEFT, 1920, 1080, t))
-        assertEquals(JctZone.Rect(960, 1037, 917, 43), JctZone.geometry(JctZone.BOTTOM_RIGHT, 1920, 1080, t))
-        assertNull(JctZone.geometry(JctZone.BOTTOM_LEFT, 80, 1080, 43))
+        assertEquals(32, t)
+        assertEquals(JctZone.Rect(0, 0, 32, 540), JctZone.geometry(JctZone.LEFT_TOP, 1920, 1080, t))
+        assertEquals(JctZone.Rect(1888, 540, 32, 540), JctZone.geometry(JctZone.RIGHT_BOTTOM, 1920, 1080, t))
+        assertEquals(JctZone.Rect(32, 1048, 928, 32), JctZone.geometry(JctZone.BOTTOM_LEFT, 1920, 1080, t))
+        assertEquals(JctZone.Rect(960, 1048, 928, 32), JctZone.geometry(JctZone.BOTTOM_RIGHT, 1920, 1080, t))
+        assertNull(JctZone.geometry(JctZone.BOTTOM_LEFT, 60, 1080, 32))
     }
 
-    @Test fun zoneThreshold() {
-        assertFalse(JctZone.fires(60f, 60f))   // 84.8 px
-        assertTrue(JctZone.fires(91f, 0f))
-        assertTrue(JctZone.fires(5000f, 0f))   // capped at 500 still fires
+    @Test fun zoneRequiresAnInwardStroke() {
+        assertFalse(JctZone.fires(JctZone.LEFT_TOP, -100f, 0f, 72f))
+        assertFalse(JctZone.fires(JctZone.LEFT_TOP, 80f, 100f, 72f))
+        assertTrue(JctZone.fires(JctZone.LEFT_TOP, 80f, 0f, 72f))
+        assertTrue(JctZone.fires(JctZone.RIGHT_BOTTOM, -80f, 0f, 72f))
+        assertTrue(JctZone.fires(JctZone.BOTTOM_RIGHT, 0f, -80f, 72f))
     }
 
     @Test fun naviStartDisplayActionsRoundTrip() {
         listOf("enum:GO_TO_PP", "enum:GO_TO_GU", "enum:TOGGLE_GU_PP", "enum:RUN_BLACK", "enum:RECENT_TASK_MANAGER", "enum:MEDIA_PLAY_PAUSE")
             .forEach { assertEquals(it, JctActions.encode(JctActions.parse(it))); assertTrue(JctActions.valid(JctActions.parse(it))) }
         assertEquals(9, JctEnum.TOGGLE_GU_PP.code)
-        assertEquals("Black screen", JctEnum.RUN_BLACK.label(true))
+        assertEquals("Dark screen mode", JctEnum.RUN_BLACK.label(true))
     }
 
     @Test fun splitBounds() {

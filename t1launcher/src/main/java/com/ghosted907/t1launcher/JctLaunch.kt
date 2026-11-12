@@ -20,7 +20,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** NaviStart `h0.c.o()` key/value store, kept in its own file so keys match NaviStart 1:1. */
+/** Preferences shared by the launch controls and their background services. */
 object JctStore {
     const val FILE = "jct"
     fun p(context: Context) = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -31,38 +31,30 @@ object JctStore {
     fun int(c: Context, k: String, d: Int) = p(c).getInt(k, d)
     fun putInt(c: Context, k: String, v: Int) = p(c).edit().putInt(k, v).apply()
 
-    // Keys copied from NaviStart 1.4.1
-    const val PKG = "pkg"                                  // app chosen for "launch on cluster/tablet"
-    const val PKG_DEFAULT = "ru.yandex.yandexnavi"         // NaviStart's default value of "pkg"
+    // Existing keys stay stable so settings from earlier T1 versions keep working.
+    const val PKG = "pkg"
+    const val PKG_DEFAULT = ""
     const val BOOT = "boot"                                // auto-start "pkg" on the cluster
     const val LOUNCHB_TRUE = "LounchBTrue"                 // single floating button on/off
     const val LOUNCHB_ACTION = "LounchB_set_new"           // floating button action
     const val MULTI_ON = "sw_multi_button"                 // multi button on/off
-    const val MULTI_COUNT = "multi_use_eight_buttons"      // 8 = eight buttons, 6 = four buttons (NaviStart value)
+    const val MULTI_COUNT = "multi_use_eight_buttons"
     const val MULTI_ACTION = "multi_action_"               // + 0..7
     const val OVER_SYSTEM = "widgets_over_system"          // default true
     const val TASKS = "run_app_more_settings"              // task group JSON
     const val TASKS_DELAY = "run_app_more_settings_DELAY"  // seconds, default 1
     const val TASKS_BOOT = "sw_run_app_more"
     const val ZONE_ACTION = "GestureZoneManager"           // + zone name
-    // Launcher-specific: NaviStart takes these from its car profile (getGuDisplayID / getPriDisplayID).
+    // Display indices can be overridden when the OEM reports an unexpected order.
     const val GU_INDEX = "gu_display_index"
     const val PRI_INDEX = "pri_display_index"
-    // 1.11.0: where "pkg" was last sent (2 = cluster, 3 = head unit), for CarRunApp_TOGGLE_GU_PP.
-    // Same values as NaviStart's "areaBoot"; kept under its own key so the boot choice is untouched.
+    // The destination used by the last successful manual launch.
     const val PKG_AREA = "pkg_area"
     const val AREA_PRI = 2
     const val AREA_GU = 3
 }
 
-/**
- * JCarTools launch path, 1:1 with `boot.onStartCommand` / `j0.c.g` / `a1.c` case 6:
- *   intent = packageManager.getLaunchIntentForPackage(pkg)
- *   intent.addFlags(FLAG_ACTIVITY_NEW_TASK)                       (268435456)
- *   options = ActivityOptions.makeBasic().setLaunchDisplayId(displays[d].displayId)
- *   startActivity(intent, options.toBundle())
- * where `d` is an INDEX into DisplayManager.getDisplays(), not a display id.
- */
+/** Android display launches and reusable launcher shortcut execution. */
 object JctLaunch {
     private const val TAG = "JctLaunch"
     const val PROFILE_TASKS = JctStore.TASKS
@@ -95,9 +87,10 @@ object JctLaunch {
         "[$i] id=${d.displayId} ${m.widthPixels}×${m.heightPixels}"
     }.joinToString("\n")
 
-    /** Shared core. Returns false (like NaviStart, silently) when it cannot launch. */
+    /** Returns false when the selected app or display is unavailable. */
     fun startOnDisplayIndex(context: Context, pkg: String, d: Int): Boolean {
         return try {
+            if (pkg.isBlank()) return false
             val intent = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
             val displays = displays(context)
             if (d < 0 || displays.size <= d) return false
@@ -113,14 +106,16 @@ object JctLaunch {
         }
     }
 
-    /** MainActivity "تشغيل على لوحة العدادات" / "تشغيل على الجهاز اللوحي": save "pkg", then the boot service with extra d. */
-    fun runPkgOn(context: Context, pkg: String, cluster: Boolean) {
+    /** Save the chosen app and destination only after Android accepts the launch. */
+    fun runPkgOn(context: Context, pkg: String, cluster: Boolean): Boolean {
+        val index = if (cluster) priIndex(context) else guIndex(context)
+        if (!startOnDisplayIndex(context, pkg, index)) return false
         JctStore.putStr(context, JctStore.PKG, pkg)
         JctStore.putInt(context, JctStore.PKG_AREA, if (cluster) JctStore.AREA_PRI else JctStore.AREA_GU)
-        JctBootService.start(context, if (cluster) priIndex(context) else guIndex(context))
+        return true
     }
 
-    /** j0.c.g: action dispatcher used by floating/multi buttons, edge zones, task groups. */
+    /** Dispatcher used by floating buttons, edge shortcuts, and task groups. */
     fun run(context: Context, action: JctAction) {
         when (action.type) {
             JctType.ENUM -> runEnum(context, action.enumValue ?: return)
@@ -133,7 +128,6 @@ object JctLaunch {
     fun runKey(context: Context, key: String) =
         run(context, JctActions.parse(JctStore.str(context, key, JctActions.NOT_VALUE)))
 
-    /** e0.z.e for the enum actions this port carries. */
     private fun runEnum(context: Context, e: JctEnum) {
         when (e) {
             JctEnum.Not_value -> Unit
@@ -146,14 +140,11 @@ object JctLaunch {
             JctEnum.MEDIA_PAUSE -> T1NotificationListener.instance?.controller()?.transportControls?.pause()
             JctEnum.MEDIA_NEXT -> T1NotificationListener.instance?.controller()?.transportControls?.skipToNext()
             JctEnum.MEDIA_BLACK -> T1NotificationListener.instance?.controller()?.transportControls?.skipToPrevious()
-            // e0.z.e case 1 / 6 / 9: the stored "pkg" on the cluster, on the head unit, or on the other one.
             JctEnum.GO_TO_PP -> runPkgOn(context, storedPkg(context), cluster = true)
             JctEnum.GO_TO_GU -> runPkgOn(context, storedPkg(context), cluster = false)
             JctEnum.TOGGLE_GU_PP -> runPkgOn(context, storedPkg(context),
                 cluster = JctStore.int(context, JctStore.PKG_AREA, JctStore.AREA_GU) != JctStore.AREA_PRI)
-            // e0.z.e case 2: BlackActivity with setLaunchDisplayId on the head-unit display.
             JctEnum.RUN_BLACK -> startOwnOnDisplayIndex(context, Intent(context, JctBlackActivity::class.java), guIndex(context))
-            // Code 74 opens NaviStart's own recents fragment; here the system recents, else T1's apps page (recent list).
             JctEnum.RECENT_TASK_MANAGER -> {
                 val done = T1TouchService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS) == true
                 if (!done) runEnum(context, JctEnum.RUN_START_APP_MENU)
@@ -167,7 +158,7 @@ object JctLaunch {
 
     private fun storedPkg(context: Context) = JctStore.str(context, JctStore.PKG, JctStore.PKG_DEFAULT)
 
-    /** T1's own activity on a display index, same ActivityOptions as NaviStart (r5.k.D). */
+    /** Open one of our activities on a selected display. */
     fun startOwnOnDisplayIndex(context: Context, intent: Intent, d: Int): Boolean = try {
         val displays = displays(context)
         if (d < 0 || d >= displays.size) false else {
@@ -179,11 +170,7 @@ object JctLaunch {
         Log.w(TAG, "start own d=$d failed ${e.javaClass.simpleName}: ${e.message}"); false
     }
 
-    /**
-     * Split pair. NaviStart hands SPLIT to a closed native proxy; its readable test path (o1.c) uses
-     * ActivityOptions windowing mode + launch bounds. T1 does the same through the existing freeform
-     * launcher (HomeAppWindows.dock) on display 0, so it only works when freeform support is on.
-     */
+    /** Place two launchable activities in the launcher's existing freeform dock. */
     fun runSplit(context: Context, action: JctAction) {
         val main = Handler(Looper.getMainLooper())
         val a = action.pkg ?: return
@@ -206,7 +193,7 @@ object JctLaunch {
         if (!ok) main.post { Toast.makeText(context, tr(context, "تعذّر فتح أحد تطبيقي التقسيم", "Could not open one of the split apps"), Toast.LENGTH_LONG).show() }
     }
 
-    // ---- task group (run_app_more_settings_fragment / j0.c.a) ----
+    // Task group entries retain their saved JSON shape from earlier T1 versions.
     data class Task(val phrase: String, val enabled: Boolean, val matchFull: Boolean, val action: String)
 
     fun loadTasks(context: Context, key: String = JctStore.TASKS): List<Task> = try {
@@ -216,7 +203,6 @@ object JctLaunch {
         } }
     } catch (e: Exception) { emptyList() }
 
-    /** j0.c.i: same JSON fields. */
     fun saveTasks(context: Context, tasks: List<Task>, key: String = JctStore.TASKS) {
         val a = JSONArray()
         tasks.forEach { a.put(JSONObject().put("phrase", it.phrase).put("enabled", it.enabled).put("matchFull", it.matchFull).put("action", it.action)) }
@@ -230,7 +216,7 @@ object JctLaunch {
         val app = context.applicationContext
         val delay = JctStore.int(app, JctStore.TASKS_DELAY, 1).coerceIn(1, 20) * 1000L
         val main = Handler(Looper.getMainLooper())
-        loadTasks(app, key).map { JctActions.parse(it.action) }.filter { JctActions.valid(it) }
+        loadTasks(app, key).filter { it.enabled }.map { JctActions.parse(it.action) }.filter { JctActions.valid(it) }
             .filterNot { it.type == JctType.CUSTOM_CMD && it.profile == key }
             .forEachIndexed { i, action ->
                 scheduler.schedule({ main.post { run(app, action) } }, delay * (i + 1), TimeUnit.MILLISECONDS)
@@ -249,9 +235,7 @@ object JctLaunch {
 }
 
 /**
- * Port of NaviStart `boot` service display path: extra int "d" (> -1) is the index into
- * getDisplays(); the package comes from stored "pkg" (default ru.yandex.yandexnavi);
- * launch only when more than one display exists.
+ * Handles delayed cluster launch after vehicle startup. The extra is a display index.
  */
 class JctBootService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -283,7 +267,7 @@ class JctBootService : Service() {
             context.startForegroundService(i)
         }
 
-        /** MyCarReceiver: cluster app and task group after start, cluster ~10 s later. */
+        /** Queue optional startup shortcuts after the system reports car start. */
         fun onCarStart(context: Context) {
             val app = context.applicationContext
             val h = Handler(Looper.getMainLooper())
