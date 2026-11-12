@@ -16,15 +16,25 @@ enum class JctType { ENUM, APP, SPLIT, CUSTOM_CMD }
  * recovered Java (`e0.z.e`, `a7.g` case 14) and can run inside this launcher.
  * [code] is NaviStart's own action code.
  */
-enum class JctEnum(val code: Int, val labelAr: String) {
-    Not_value(0, "غير محدد"),
-    RUN_START_APP_MENU(7, "قائمة تشغيل التطبيقات المثبتة"),
-    GLOBAL_BACK(8, "رجوع"),
-    GLOBAL_HOME(18, "الشاشة الرئيسية"),
-    MEDIA_PLAY(14, "تشغيل الوسائط"),
-    MEDIA_PAUSE(15, "إيقاف الوسائط مؤقتًا"),
-    MEDIA_NEXT(16, "المسار التالي"),
-    MEDIA_BLACK(17, "المسار السابق");
+enum class JctEnum(val code: Int, val labelAr: String, val labelEn: String) {
+    Not_value(0, "غير محدد", "Not specified"),
+    // 1.11.0: NaviStart n0.d display-routing actions (codes 1, 6, 9) and black screen (2).
+    GO_TO_PP(1, "عرض التطبيق على لوحة العدادات", "Show app on instrument cluster"),
+    RUN_BLACK(2, "شاشة سوداء", "Black screen"),
+    GO_TO_GU(6, "عرض التطبيق على وحدة الرأس", "Show app on head unit"),
+    TOGGLE_GU_PP(9, "تبديل التطبيق بين وحدة الرأس/لوحة العدادات", "Switch app between head unit and cluster"),
+    RUN_START_APP_MENU(7, "قائمة تشغيل التطبيقات المثبتة", "Launch installed apps menu"),
+    GLOBAL_BACK(8, "رجوع", "Global back button"),
+    GLOBAL_HOME(18, "الشاشة الرئيسية", "Global Home button"),
+    MEDIA_PLAY(14, "تشغيل الوسائط", "Media play"),
+    MEDIA_PAUSE(15, "إيقاف الوسائط مؤقتًا", "Media pause"),
+    MEDIA_NEXT(16, "المسار التالي", "Media next track"),
+    MEDIA_BLACK(17, "المسار السابق", "Media previous track"),
+    // 1.11.0: NaviStart n0.d codes 74 and 75.
+    RECENT_TASK_MANAGER(74, "مدير التطبيقات الأخيرة", "Recent apps manager"),
+    MEDIA_PLAY_PAUSE(75, "تشغيل/إيقاف الوسائط مؤقتًا", "Media play/pause");
+
+    fun label(english: Boolean) = if (english) labelEn else labelAr
 
     companion object {
         fun byName(name: String?): JctEnum? = values().firstOrNull { it.name == name }
@@ -110,10 +120,30 @@ object JctActions {
     }
 }
 
+/**
+ * Split-pair geometry for "split:<a>,<b>,<orient>,<ratio>" (fragment_apps2.xml: horizontal/vertical,
+ * 30:70 / 50:50 / 70:30). orientation 1 = side by side, 2 = stacked; ratio = first app's share.
+ * Returns the two window rects as [x, y, w, h].
+ */
+object JctSplit {
+    fun bounds(width: Int, height: Int, orientation: Int, ratio: Int): Pair<JctZone.Rect, JctZone.Rect> {
+        val r = if (ratio != 30 && ratio != 70) 50 else ratio
+        return if (orientation == 2) {
+            val h1 = height * r / 100
+            JctZone.Rect(0, 0, width, h1) to JctZone.Rect(0, h1, width, height - h1)
+        } else {
+            val w1 = width * r / 100
+            JctZone.Rect(0, 0, w1, height) to JctZone.Rect(w1, 0, width - w1, height)
+        }
+    }
+}
+
 /** NaviStart six edge zones (o0.f) and their geometry (a7.g case 17). */
-enum class JctZone(val labelAr: String) {
-    LEFT_TOP("يسار أعلى"), LEFT_BOTTOM("يسار أسفل"), RIGHT_TOP("يمين أعلى"),
-    RIGHT_BOTTOM("يمين أسفل"), BOTTOM_LEFT("أسفل يسار"), BOTTOM_RIGHT("أسفل يمين");
+enum class JctZone(val labelAr: String, val labelEn: String) {
+    LEFT_TOP("يسار أعلى", "Left top"), LEFT_BOTTOM("يسار أسفل", "Left bottom"), RIGHT_TOP("يمين أعلى", "Right top"),
+    RIGHT_BOTTOM("يمين أسفل", "Right bottom"), BOTTOM_LEFT("أسفل يسار", "Bottom left"), BOTTOM_RIGHT("أسفل يمين", "Bottom right");
+
+    fun label(english: Boolean) = if (english) labelEn else labelAr
 
     data class Rect(val x: Int, val y: Int, val w: Int, val h: Int)
 

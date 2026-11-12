@@ -78,6 +78,15 @@
             android:theme="@style/Theme.T1.Overlay"
             android:launchMode="singleTask" />
 
+        <!-- NaviStart BlackActivity: black screen / dim clock, started on a display by the RUN_BLACK action. -->
+        <activity
+            android:name=".JctBlackActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="false"
+            android:taskAffinity="com.ghosted907.t1launcher.black"
+            android:theme="@style/Theme.T1" />
+
         <!-- T1 Remote: phone control over Wi-Fi. Started only when enabled in settings. -->
         <service android:name=".RemoteHostService" android:exported="false" />
 
