@@ -233,6 +233,7 @@ fun SettingsPage(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
         Text("الإعدادات", color = text, fontSize = 28.sp)
         SettingsChip("تشغيل التطبيقات · الأزرار العائمة · مناطق الحافة · إخفاء التطبيقات", true, onButtons)
+        RemoteSettingsCard(day)
         if (!overlayOk) {
             Text(
                 "الأزرار العائمة ومربع الاستعادة تحتاج صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",

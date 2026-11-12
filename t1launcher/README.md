@@ -2,22 +2,24 @@
 
 Local development update (2026-11-12): the launcher uses a Saudi green and gold theme, a gold
 crossed-swords-and-palm emblem and a restrained geometric gold trim. Its display layout follows
-the original Jetour screens in `screenshots/original`: a dark, image-led canvas, the vehicle as the
-main visual, slim data labels, square control tiles, a circular compass, and bottom navigation.
-The vehicle overview now uses
-a generated top-down T1 image based on the original car artwork; the earlier T2-like drivetrain image
-is no longer shown. Tire pressure and temperature sit beside the corresponding four wheels, with
+the original Jetour screens in `../../../screenshots/original`: a dark, image-led canvas, the vehicle as the
+main visual, slim data labels, three-part window controls, a circular compass, and bottom navigation.
+The home scene uses a clean landscape derived from the original screen and a transparent T1 cutout.
+The vehicle overview places a 3/4 T1 in the center, a portrait top-down T1 with its four tire
+readings on the left, and the compass on the right. The earlier T2-like drivetrain image
+is no longer shown. Tire pressure and temperature sit symmetrically beside the corresponding wheels, with
 drive mode, steering, pitch, roll, heading, and altitude below. This overview opens first under
 **بيانات السيارة**; the full readings and searchable property catalogue remain in adjacent tabs.
 The home screen places live Waze and YouTube freeform tasks over two fixed cards directly below
 the Jetour image when freeform support
 is enabled. Tapping a card header expands that task to fullscreen; bringing T1 to the front restores
-the task to its card where the device permits task reuse. The original home car artwork and live
+the task to its card where the device permits task reuse. The reference-inspired home scene and live
 driving readings remain below. Long-press an app to pin it ahead of the default shortcuts;
 the Apps page also shows recently launched apps. Apps can open on the main screen or cluster, and
 app launch, floating buttons, edge zones and app hiding follow JCarTools/NaviStart 1.4.1 (see below).
 All 99 structured readings and the searchable OEM SDK catalogue
-remain under **بيانات السيارة**. Window, roof, and OEM settings controls are under **التحكم**.
+remain under **بيانات السيارة**. Window, roof, and shade controls each use one three-part segmented
+control under **التحكم**; OEM settings are also there.
 See [TELEMETRY.md](TELEMETRY.md) for coverage, raw-value semantics, and validation.
 The previous debug APK was installed on the car for a visual and live-reading check. This version
 was built locally and has not yet been verified on the connected car.
@@ -27,7 +29,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-v1.9.2.apk
+adb install -r ..\..\t1launcher-saudi-oem-match-v1.10.2.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -39,7 +41,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 12, versionName 1.9.2. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 15, versionName 1.10.2. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 ## Home app windows
 

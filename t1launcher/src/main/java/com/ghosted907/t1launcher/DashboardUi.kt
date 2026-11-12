@@ -219,23 +219,28 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
     LaunchedEffect(scroll.isScrollInProgress) { onScrolling(scroll.isScrollInProgress) }
     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { viewport = it.boundsInRoot() }) {
         val compact = maxHeight <= 600.dp
-        val heroHeight = (maxHeight * .42f).coerceIn(255.dp, 370.dp)
         val dockHeight = (maxHeight * .48f).coerceIn(278.dp, 350.dp)
+        val heroHeight = (maxHeight - dockHeight - 9.dp).coerceIn(255.dp, 560.dp)
         // The whole home layout scrolls as one: dragging up lifts the hero, the Waze/YouTube dock and the
         // favourites together (previously only the lower section had its own scroll and moved alone).
         Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(9.dp))
+            Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(4.dp))
                 .background(Color(0xFF101B17))) {
-                Image(painter = androidx.compose.ui.res.painterResource(if (day) R.drawable.oem_t1_day else R.drawable.oem_t1_dark),
-                    contentDescription = "سيارة جيتور T1", modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -.35f))
+                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_oem_landscape),
+                    contentDescription = null, modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -.6f))
                 Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                    listOf(Color(0xE8071711), Color(0x8C10251B), Color(0x0010251B)), startX = 0f)))
-                Column(Modifier.align(Alignment.CenterEnd).width(260.dp).padding(start = 22.dp, end = 12.dp),
+                    listOf(Color(0xE8071711), Color(0xA610251B), Color(0x3610251B)), startX = 0f)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                    listOf(Color.Transparent, Color(0x18071913), Color(0xA6081410)))))
+                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
+                    contentDescription = "سيارة جيتور T1", modifier = Modifier.align(Alignment.BottomStart)
+                        .fillMaxWidth(.66f).fillMaxHeight(.96f), contentScale = ContentScale.Fit)
+                Column(Modifier.align(Alignment.CenterEnd).width(335.dp).padding(start = 26.dp, end = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("JETOUR  T1", color = T1Colors.goldSoft, fontSize = 13.sp,
+                    Text("JETOUR  T1", color = T1Colors.goldSoft, fontSize = 16.sp,
                         fontFamily = FontFamily.SansSerif, letterSpacing = 2.sp)
-                    Text("جاهزة لكل طريق", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Text("جاهزة لكل طريق", color = Color.White, fontSize = 33.sp, fontWeight = FontWeight.SemiBold)
                     Text(if (snap.liveCount > 0) "بيانات السيارة المباشرة" else "بانتظار بيانات السيارة",
                         color = Color(0xFFDDD6C4), fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -364,26 +369,65 @@ private fun HomeQuickTile(icon: String, label: String, day: Boolean, modifier: M
 }
 
 @Composable
-fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
+fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit, onPage: (Page) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val stageHeight = (maxHeight * .62f).coerceIn(340.dp, 540.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.fillMaxWidth().height(245.dp).clip(RoundedCornerShape(9.dp))) {
-            Image(painter = androidx.compose.ui.res.painterResource(if (day) R.drawable.oem_t1_day else R.drawable.oem_t1_dark),
-                contentDescription = "جيتور T1", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-                alignment = BiasAlignment(0f, -.25f))
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                listOf(Color(0xD50B1914), Color(0x70142018), Color.Transparent))))
-            Column(Modifier.align(Alignment.CenterEnd).padding(24.dp)) {
-                Text("المركبة", color = accent(day), fontSize = 14.sp, letterSpacing = 2.sp)
-                Text("التحكم بالسيارة", color = Color.White, fontSize = 29.sp)
-                Text("النوافذ · السقف · الستارة", color = Color(0xFFE4E5DA), fontSize = 15.sp)
-                Spacer(Modifier.height(12.dp))
-                ActionButton("تفاصيل النوافذ", day, onClick = onWindows)
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.fillMaxWidth().height(stageHeight).clip(RoundedCornerShape(4.dp))
+            .background(Brush.verticalGradient(if (day)
+                listOf(Color(0xFFD8DED7), Color(0xFFAEBEB4), Color(0xFF849D8E))
+                else listOf(Color(0xFF263731), Color(0xFF35423C), Color(0xFF101A16))))) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.width(210.dp).fillMaxHeight().padding(vertical = 12.dp)
+                    .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    listOf(
+                        Triple("المركبة", Page.Controls, true),
+                        Triple("بيانات السيارة", Page.Vehicle, false),
+                        Triple("العدادات", Page.Cluster, false),
+                        Triple("الكاميرا", Page.Camera, false),
+                        Triple("الإعدادات", Page.Settings, false)
+                    ).forEach { (label, target, selected) ->
+                        Row(Modifier.fillMaxWidth().height(54.dp)
+                            .background(if (selected) accent(day).copy(alpha = .13f) else Color.Transparent)
+                            .clickable { onPage(target) }.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(Modifier.width(3.dp).height(30.dp)
+                                .background(if (selected) accent(day) else Color.Transparent))
+                            Text(label, color = if (selected) ink(day) else muted(day),
+                                fontSize = if (selected) 21.sp else 18.sp, maxLines = 1,
+                                textAlign = TextAlign.Right, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
+                        contentDescription = "جيتور T1", modifier = Modifier.fillMaxSize().padding(6.dp),
+                        contentScale = ContentScale.Fit)
+                    Column(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
+                        Text("JETOUR T1", color = accent(day), fontSize = 14.sp, letterSpacing = 2.sp)
+                        Text("التحكم بالمركبة", color = ink(day), fontSize = 25.sp)
+                    }
+                }
+                Column(Modifier.width(225.dp).fillMaxHeight().padding(end = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    TailgateGauge(day, snap.reading("tailgate_height").current)
+                    Text("ارتفاع الباب الخلفي الكهربائي", color = ink(day), fontSize = 14.sp,
+                        textAlign = TextAlign.Center)
+                    Text("قراءة مباشرة عند الاتصال", color = muted(day), fontSize = 11.sp)
+                    Spacer(Modifier.height(12.dp))
+                    ActionButton("النوافذ بالتفصيل", day, onClick = onWindows)
+                }
+            }
             }
             SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
         }
-        OemSettingsCard(day)
         VehicleControlPanel(day, snap)
+        OemSettingsCard(day)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LightPill("إشارة يسار", snap.reading("turn_left"), day)
@@ -391,6 +435,26 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
             LightPill("منخفض", snap.reading("low_beam"), day)
             LightPill("عالٍ", snap.reading("high_beam"), day)
         }
+    }
+    }
+}
+
+@Composable
+private fun TailgateGauge(day: Boolean, value: Double?) {
+    val gold = accent(day)
+    Box(Modifier.size(165.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val width = 7.dp.toPx()
+            val inset = 12.dp.toPx()
+            val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
+            val top = Offset(inset, inset)
+            drawArc(ink(day).copy(alpha = .28f), 145f, 250f, false, top, arcSize,
+                style = Stroke(width, cap = StrokeCap.Round))
+            value?.let { drawArc(gold, 145f, (it / 100.0).coerceIn(0.0, 1.0).toFloat() * 250f,
+                false, top, arcSize, style = Stroke(width, cap = StrokeCap.Round)) }
+        }
+        Text(value?.let { "${it.toInt()}%" } ?: "—", color = ink(day), fontSize = 38.sp,
+            fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Light)
     }
 }
 
@@ -496,18 +560,20 @@ fun VehiclePage(day: Boolean, snap: CarBridge.Snap, bridge: CarBridge) {
         onDispose { bridge.setExtraProperties(emptyList()) }
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().height(42.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("سيارتك بالتفصيل", color = ink(day), fontSize = 25.sp)
-                Text("${snap.liveCount} / ${SignalCatalog.all.size} قراءة مباشرة  ·  ${catalog.size} خاصية في الفهرس", color = muted(day), fontSize = 12.sp)
+                Text(if (groupName == "OVERVIEW") "OFF ROAD  ·  JETOUR T1" else "قراءات المركبة",
+                    color = if (groupName == "OVERVIEW") accent(day) else ink(day), fontSize = 17.sp)
             }
-            ActionButton("إعادة الاتصال", day) { bridge.retry() }
+            Text("${snap.liveCount} قراءة مباشرة", color = muted(day), fontSize = 12.sp)
+            TextButton(onClick = { bridge.retry() }) { Text("إعادة الاتصال", color = accent(day), fontSize = 12.sp) }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Choice("نظرة عامة", groupName == "OVERVIEW", day) { groupName = "OVERVIEW"; query = "" }
-            Choice("الكل", groupName == "ALL", day) { groupName = "ALL"; query = "" }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            VehicleTab("نظرة عامة", groupName == "OVERVIEW", day) { groupName = "OVERVIEW"; query = "" }
+            VehicleTab("الكل", groupName == "ALL", day) { groupName = "ALL"; query = "" }
             SignalGroup.entries.forEach { item ->
-                Choice(item.label, item == group, day) { groupName = item.name; rawPage = 0; query = "" }
+                VehicleTab(item.label, item == group, day) { groupName = item.name; rawPage = 0; query = "" }
             }
         }
         if (groupName == "OVERVIEW") {
@@ -548,6 +614,17 @@ fun VehiclePage(day: Boolean, snap: CarBridge.Snap, bridge: CarBridge) {
             }
         }
         }
+    }
+}
+
+@Composable
+private fun VehicleTab(label: String, selected: Boolean, day: Boolean, onClick: () -> Unit) {
+    Column(Modifier.height(38.dp).clickable(onClick = onClick).padding(horizontal = 11.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = if (selected) ink(day) else muted(day), fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+        Box(Modifier.width(30.dp).height(2.dp).background(if (selected) accent(day) else Color.Transparent))
     }
 }
 

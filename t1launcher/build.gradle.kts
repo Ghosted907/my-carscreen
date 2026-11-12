@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghosted907.t1launcher"
         minSdk = 30
         targetSdk = 30
-        versionCode = 12
-        versionName = "1.9.2"
+        versionCode = 15
+        versionName = "1.10.2"
     }
 
     val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")
@@ -33,6 +33,9 @@ android {
             }
         }
     }
+
+    // Phone remote (T1 Remote) wire protocol, shared with the :t1remote module.
+    sourceSets["main"].java.srcDir("../remote-protocol/src/main/kotlin")
 
     buildFeatures {
         compose = true

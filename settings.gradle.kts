@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "clusterdiag"
 include(":app")
 include(":t1launcher")
+include(":t1remote")

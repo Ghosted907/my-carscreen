@@ -26,6 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,57 +100,62 @@ fun OemSettingsCard(day: Boolean) {
 fun VehicleControlPanel(day: Boolean, snap: CarBridge.Snap) {
     val context = LocalContext.current
     val control = remember { VehicleControl(context) }
-    var status by remember { mutableStateOf("أوامر مباشرة لخدمة السيارة؛ لم تُجرّب الحركة من اللانشر بعد") }
+    var status by remember { mutableStateOf("اختر أمراً للتحكم في المركبة") }
     DisposableEffect(control) { onDispose { control.close() } }
-    Column(Modifier.fillMaxWidth().background(tile(day), RoundedCornerShape(10.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("النوافذ والسقف والستارة", color = tone(day), fontSize = 21.sp)
-        VehicleCommands.all.chunked(5).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { command ->
-                    Column(Modifier.weight(1f).height(104.dp).clip(RoundedCornerShape(8.dp))
-                        .background(if (day) Color(0xFFE9EADF) else Color(0xFF202B27))
-                        .border(1.dp, Gold.copy(alpha = .25f), RoundedCornerShape(8.dp))
-                        .clickable { control.send(command.id) { status = it } }
-                        .padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                        ControlCommandIcon(command.id, day)
-                        Text(command.label, color = tone(day), fontSize = 14.sp, maxLines = 2)
+    Column(Modifier.fillMaxWidth().background(tile(day), RoundedCornerShape(10.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val groups = listOf(
+            "التحكم في النوافذ" to listOf("التهوية" to "windows_vent", "مغلق" to "windows_close", "مفتوح" to "windows_open"),
+            "التحكم في فتحة السقف" to listOf("إمالة لأعلى" to "roof_tilt", "مغلق" to "roof_close", "مفتوح" to "roof_open"),
+            "التحكم في الستارة الشمسية" to listOf("نصف مفتوح" to "shade_half", "مغلق" to "shade_close", "مفتوح" to "shade_open")
+        )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 1050.dp) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    groups.forEach { (title, commands) ->
+                        SegmentedVehicleControl(title, commands, day, Modifier.weight(1f)) { id ->
+                            control.send(id) { status = it }
+                        }
                     }
                 }
-                repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    groups.forEach { (title, commands) ->
+                        SegmentedVehicleControl(title, commands, day, Modifier.fillMaxWidth()) { id ->
+                            control.send(id) { status = it }
+                        }
+                    }
+                }
             }
         }
         val stationary = VehicleCommands.stationary(snap.reading("speed").current, snap.reading("gear").current)
         // Disabled until the exact OEM start/stop request (not feedback props 2051/2052) is verified.
-        OutlinedButton(enabled = false, onClick = {}, modifier = Modifier.fillMaxWidth()) { Text("الباب الخلفي · اضغط ثانيتين للتشغيل / الإيقاف") }
-        Text(if (!stationary) "الباب الخلفي: يلزم توقف مؤكد (سرعة حية 0 وP إن توفر)." else "السيارة متوقفة؛ زر الباب ينتظر توثيق أمر التشغيل/الإيقاف.", color = Gold, fontSize = 12.sp)
-        Text("زر الباب معطّل: 2051 و2052 قراءات وليستا أمر تشغيل. لم نخمن أمراً.", color = Gold, fontSize = 12.sp)
-        TextButton(onClick = { control.probe { status = it } }) { Text("فحص اتصال للقراءة فقط · لا يحرّك شيئاً") }
+        OutlinedButton(enabled = false, onClick = {}, modifier = Modifier.fillMaxWidth()) { Text("الباب الخلفي · غير متاح من اللانشر") }
+        Text(if (!stationary) "يلزم توقف السيارة للتحكم بالباب الخلفي." else "تحكم الباب الخلفي غير متاح حالياً.",
+            color = Gold, fontSize = 12.sp)
+        TextButton(onClick = { control.probe { status = it } }) { Text("فحص الاتصال للقراءة فقط") }
         Text(status, color = tone(day), fontSize = 12.sp)
     }
 }
 
 @Composable
-private fun ControlCommandIcon(id: String, day: Boolean) {
-    val color = detailGold(day)
-    Canvas(Modifier.size(32.dp)) {
-        val w = size.width
-        val stroke = 2.dp.toPx()
-        val top = if (id.startsWith("roof")) .22f else .30f
-        drawRoundRect(color, Offset(w*.12f,w*top),
-            androidx.compose.ui.geometry.Size(w*.76f,w*.50f),
-            androidx.compose.ui.geometry.CornerRadius(w*.07f), style = Stroke(stroke))
-        if (id.startsWith("shade")) {
-            repeat(3) { index ->
-                val x = w*(.30f+index*.20f)
-                drawLine(color.copy(alpha = .7f), Offset(x,w*.32f), Offset(x,w*.72f), stroke*.65f)
+private fun SegmentedVehicleControl(title: String, commands: List<Pair<String, String>>,
+                                    day: Boolean, modifier: Modifier = Modifier, onCommand: (String) -> Unit) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = tone(day), fontSize = 18.sp, maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(66.dp).clip(RoundedCornerShape(7.dp))
+            .background(if (day) Color(0xFFE4E7DE) else Color(0xFF292D2C)),
+            verticalAlignment = Alignment.CenterVertically) {
+            commands.forEachIndexed { index, (label, id) ->
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { onCommand(id) },
+                    contentAlignment = Alignment.Center) {
+                    Text(label, color = tone(day), fontSize = 17.sp, textAlign = TextAlign.Center,
+                        maxLines = 2, modifier = Modifier.padding(horizontal = 3.dp))
+                }
+                if (index < commands.lastIndex) Box(Modifier.width(1.dp).height(34.dp)
+                    .background(detailGold(day).copy(alpha = .34f)))
             }
-        } else {
-            drawLine(color.copy(alpha = .7f), Offset(w*.18f,w*.55f), Offset(w*.82f,w*.55f), stroke)
         }
-        if (id.endsWith("open") || id.endsWith("tilt"))
-            drawLine(color, Offset(w*.5f,w*.18f), Offset(w*.5f,w*.42f), stroke, cap = StrokeCap.Round)
-        else if (id.endsWith("close"))
-            drawLine(color, Offset(w*.5f,w*.84f), Offset(w*.5f,w*.60f), stroke, cap = StrokeCap.Round)
     }
 }
 
@@ -185,23 +193,36 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
                     Text("GPS للارتفاع", color = gold)
                 }
             }
-            Row(Modifier.fillMaxWidth().height(if (compact) 280.dp else 370.dp), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth().height(if (compact) 280.dp else 430.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                CompassDial(day, heading, compact, Modifier.weight(.28f).fillMaxHeight())
-                Row(Modifier.weight(.72f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically,
+                CompassDial(day, heading, compact, Modifier.weight(.23f).fillMaxHeight())
+                Box(Modifier.weight(.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val platform = Color(0xFF456B3F).copy(alpha = if (day) .32f else .43f)
+                        drawOval(platform, topLeft = Offset(size.width * .08f, size.height * .61f),
+                            size = androidx.compose.ui.geometry.Size(size.width * .84f, size.height * .33f))
+                        drawOval(gold.copy(alpha = .46f), topLeft = Offset(size.width * .08f, size.height * .61f),
+                            size = androidx.compose.ui.geometry.Size(size.width * .84f, size.height * .33f),
+                            style = Stroke(1.dp.toPx()))
+                    }
+                    Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
+                        contentDescription = "جيتور T1 المجسمة", modifier = Modifier.fillMaxSize(.94f),
+                        contentScale = ContentScale.Fit)
+                }
+                Row(Modifier.weight(.37f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center) {
-                    Column(Modifier.width(if (compact) 155.dp else 180.dp).fillMaxHeight().padding(top = 14.dp, bottom = 10.dp),
+                    Column(Modifier.width(if (compact) 132.dp else 150.dp).fillMaxHeight().padding(top = 14.dp, bottom = 10.dp),
                         verticalArrangement = Arrangement.SpaceBetween) {
-                        TireReadout("أمامي أيمن", "fr", snap, day, Modifier.height(if (compact) 88.dp else 105.dp))
-                        TireReadout("خلفي أيمن", "rr", snap, day, Modifier.height(if (compact) 88.dp else 105.dp))
+                        TireReadout("أمامي أيمن", "fr", snap, day, Modifier.height(if (compact) 88.dp else 105.dp), true)
+                        TireReadout("خلفي أيمن", "rr", snap, day, Modifier.height(if (compact) 88.dp else 105.dp), true)
                     }
                     Image(painter = androidx.compose.ui.res.painterResource(R.drawable.t1_top_view_generated),
                         contentDescription = "جيتور T1 من الأعلى، قراءات الإطارات بجوار كل إطار",
-                        modifier = Modifier.width(if (compact) 220.dp else 270.dp).fillMaxHeight(), contentScale = ContentScale.Fit)
-                    Column(Modifier.width(if (compact) 155.dp else 180.dp).fillMaxHeight().padding(top = 14.dp, bottom = 10.dp),
+                        modifier = Modifier.width(if (compact) 185.dp else 240.dp).fillMaxHeight(), contentScale = ContentScale.Fit)
+                    Column(Modifier.width(if (compact) 132.dp else 150.dp).fillMaxHeight().padding(top = 14.dp, bottom = 10.dp),
                         verticalArrangement = Arrangement.SpaceBetween) {
-                        TireReadout("أمامي أيسر", "fl", snap, day, Modifier.height(if (compact) 88.dp else 105.dp))
-                        TireReadout("خلفي أيسر", "rl", snap, day, Modifier.height(if (compact) 88.dp else 105.dp))
+                        TireReadout("أمامي أيسر", "fl", snap, day, Modifier.height(if (compact) 88.dp else 105.dp), false)
+                        TireReadout("خلفي أيسر", "rl", snap, day, Modifier.height(if (compact) 88.dp else 105.dp), false)
                     }
                 }
             }
@@ -221,16 +242,21 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
 }
 
 @Composable
-private fun TireReadout(label: String, suffix: String, snap: CarBridge.Snap, day: Boolean, modifier: Modifier) {
+private fun TireReadout(label: String, suffix: String, snap: CarBridge.Snap, day: Boolean,
+                        modifier: Modifier, nearCarOnLeft: Boolean) {
     val pressure = OffRoadPresentation.psi(snap.reading("pressure_$suffix").current)
     val temperature = snap.reading("temp_$suffix").current
     val gold = detailGold(day)
+    val align = if (nearCarOnLeft) TextAlign.Left else TextAlign.Right
     Column(modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.SpaceEvenly) {
-        Text(label, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 12.sp)
+        Text(label, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted,
+            fontSize = 12.sp, textAlign = align, modifier = Modifier.fillMaxWidth())
         Text("${fmt(pressure, 1)} psi", color = tone(day), fontSize = 24.sp,
-            fontWeight = FontWeight.Medium, maxLines = 1)
+            fontWeight = FontWeight.Medium, maxLines = 1, textAlign = align,
+            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
         Box(Modifier.fillMaxWidth().height(1.dp).background(gold.copy(alpha = .45f)))
-        Text("${fmt(temperature)} °C", color = gold, fontSize = 15.sp)
+        Text("${fmt(temperature)} °C", color = gold, fontSize = 15.sp, textAlign = align,
+            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
     }
 }
 

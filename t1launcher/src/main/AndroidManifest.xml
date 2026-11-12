@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- T1 Remote: LAN server, only listening while "التحكم من الجوال" is on. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -74,6 +77,9 @@
             android:taskAffinity="com.ghosted907.t1launcher.main"
             android:theme="@style/Theme.T1.Overlay"
             android:launchMode="singleTask" />
+
+        <!-- T1 Remote: phone control over Wi-Fi. Started only when enabled in settings. -->
+        <service android:name=".RemoteHostService" android:exported="false" />
 
         <service
             android:name=".T1NotificationListener"

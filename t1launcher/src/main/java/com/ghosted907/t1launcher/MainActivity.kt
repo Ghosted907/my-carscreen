@@ -40,6 +40,8 @@ class T1App : android.app.Application() {
         car.start()
         // NaviStart-style startup: floating/multi buttons, hide recovery square.
         JctStartup.onProcess(this)
+        // Phone remote: starts only if "التحكم من الجوال" was turned on.
+        RemoteHost.onProcess(this)
     }
 }
 
@@ -198,7 +200,7 @@ class MainActivity : ComponentActivity() {
                                 "كاميرا ٣٦٠"
                             ) { app.car.openAvm() }
                             Page.Vehicle -> VehiclePage(day, snap, app.car)
-                            Page.Controls -> ControlsPage(day, snap) { quick("windows") }
+                            Page.Controls -> ControlsPage(day, snap, { quick("windows") }, { navigate(it) })
                             Page.Customize -> SimplePage(
                                 "التخصيص",
                                 "القالب الكلاسيكي هو الافتراضي. الإضافات S1–S10 مطفأة حتى تفعّلها، ولا تغطي مؤشرات الأمان.\nثيم مقروء: ${snap.theme ?: "--"}  الخط: ${snap.font ?: "--"}",
