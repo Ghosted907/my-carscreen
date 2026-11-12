@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghosted907.t1launcher"
         minSdk = 30
         targetSdk = 30
-        versionCode = 16
-        versionName = "1.10.3"
+        versionCode = 15
+        versionName = "1.10.2"
     }
 
     val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")

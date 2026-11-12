@@ -166,14 +166,7 @@ private fun DashboardHeader(day: Boolean, page: Page, snap: CarBridge.Snap,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
             contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 36.dp, height = 40.dp))
-        val outsideTemp = snap.reading("outside_oem").current
-        val outsideText = if (outsideTemp != null) "${outsideTemp.roundToInt()}°C" else "—°C"
-        Column(verticalArrangement = Arrangement.Center) {
-            Text("JETOUR  T1", color = accent(day), fontSize = 19.sp, lineHeight = 20.sp,
-                fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(outsideText, color = accent(day), fontSize = 12.sp, lineHeight = 14.sp,
-                fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
+        Text("JETOUR  T1", color = accent(day), fontSize = 19.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
         Box(Modifier.width(1.dp).height(30.dp).background(if (day) T1Colors.dayLine else T1Colors.nightLine))
         Text(page.ar, color = ink(day), fontSize = 19.sp, modifier = Modifier.weight(1f))
         Text(if (snap.liveCount > 0) "● ${snap.liveCount} قراءة حية" else "○ بانتظار اتصال السيارة",
