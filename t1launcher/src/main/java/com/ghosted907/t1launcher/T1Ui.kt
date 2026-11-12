@@ -78,7 +78,7 @@ enum class Page(val ar: String) {
 }
 
 object T1Colors {
-    val nightBg = Color(0xFF0A1210)
+    val nightBg = Color(0xFF081C14)
     val nightCard = Color(0xFF17221E)
     val nightCard2 = Color(0xFF20362B)
     val nightLine = Color(0xFF425646)
@@ -90,7 +90,7 @@ object T1Colors {
     val cyan = gold
     val cyanSoft = goldSoft
     val sand = gold
-    val dayBg = Color(0xFFF2F0E6)
+    val dayBg = Color(0xFFF3F1E7)
     val dayCard = Color(0xFFFCFBF4)
     val dayText = Color(0xFF123827)
     val dayMuted = Color(0xFF5E7465)
@@ -238,8 +238,8 @@ fun SettingsPage(
         Text("الإعدادات", color = text, fontSize = 28.sp)
         SettingsChip(if (day) "الوضع الليلي" else "وضع النهار", true, onDay)
         SettingsChip("إدارة أذونات اللانشر", false, onPermissions)
-        JctSettingsContent(day)
         RemoteSettingsCard(day)
+        JctSettingsContent(day)
         if (!overlayOk) {
             Text(
                 "الأزرار العائمة ومربع الاستعادة تحتاج صلاحية الظهور فوق التطبيقات.\nمن الكمبيوتر:\nadb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow\nثم أعد فتح T1 أو اضغط تحقّق.",

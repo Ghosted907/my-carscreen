@@ -9,6 +9,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClientProtocolTest {
+    @Test fun artRejectsMissingCoordinatesAndOversizedPayload() {
+        val art = JSONObject().put("op", "art").put("image", "a")
+        assertTrue(RemoteProtocol.validate(art) != null)
+        art.put("x", .5).put("y", .5)
+        assertEquals(null, RemoteProtocol.validate(art))
+        art.put("x", 2)
+        assertTrue(RemoteProtocol.validate(art) != null)
+        art.put("x", .5).put("image", "a".repeat(900001))
+        assertTrue(RemoteProtocol.validate(art) != null)
+        assertEquals(null, RemoteProtocol.validate(JSONObject().put("op", "art_clear")))
+    }
     @Test fun holdFiresOnlyAfterOneSecondWithoutRelease() {
         assertFalse(HoldPolicy.fires(0, null, 999))
         assertTrue(HoldPolicy.fires(0, null, 1000))

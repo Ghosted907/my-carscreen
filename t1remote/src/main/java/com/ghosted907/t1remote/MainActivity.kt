@@ -148,7 +148,7 @@ private fun RemoteApp() {
     LaunchedEffect(client) { if (client != null) refresh() }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("T1 Remote", color = Gold, fontSize = 26.sp)
+        Text("T1 Remote · السعودية", color = Gold, fontSize = 26.sp)
         if (status.isNotEmpty()) Text(status, color = Muted, fontSize = 14.sp)
         val c = client
         when {
@@ -170,7 +170,7 @@ private fun RemoteApp() {
                     OutlinedButton(onClick = { disconnect() }) { Text("قطع") }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Card, contentColor = Gold) {
-                    listOf("التطبيقات", "النوافذ", "السيارة").forEachIndexed { i, t ->
+                    listOf("التطبيقات", "النوافذ", "السيارة", "لوحتي").forEachIndexed { i, t ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
                     }
                 }
@@ -196,11 +196,15 @@ private fun RemoteApp() {
                                     Small("نصف يسار") { send(JSONObject().put("op", "resize").put("pkg", t.pkg).put("preset", "left_half")) }
                                     Small("كامل") { send(JSONObject().put("op", "resize").put("pkg", t.pkg).put("preset", "full")) }
                                 }
-                                Small("إغلاق") { send(JSONObject().put("op", "close").put("pkg", t.pkg)) { refresh() } }
+                                if (info.optBoolean("close")) Small("إغلاق") {
+                                    send(JSONObject().put("op", "close").put("pkg", t.pkg)) { refresh() }
+                                }
                             }
                         }
                         if (!info.optBoolean("freeform")) item { Text("تغيير الحجم غير متاح: نظام السيارة ما فيه وضع النوافذ الحرة مفعّل.", color = Muted, fontSize = 13.sp) }
+                        if (!info.optBoolean("close")) item { Text("إغلاق نافذة تطبيق آخر غير متاح في هذا الإصدار.", color = Muted, fontSize = 13.sp) }
                     }
+                    3 -> ArtTab(info.optBoolean("art") && info.optBoolean("cluster")) { send(it) }
                     else -> CarTab(info.optBoolean("vehicle")) { id, held ->
                         send(JSONObject().put("op", "vehicle").put("cmd", id).put("held_ms", held))
                     }

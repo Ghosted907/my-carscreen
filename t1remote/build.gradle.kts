@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,8 +15,23 @@ android {
         applicationId = "com.ghosted907.t1remote"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 5
+        versionName = "1.2.0"
+    }
+
+    val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")
+    signingConfigs {
+        if (!releaseKeystoreB64.isNullOrBlank()) {
+            create("release") {
+                val store = layout.buildDirectory.file("release-keystore.jks").get().asFile
+                store.parentFile.mkdirs()
+                store.writeBytes(Base64.getDecoder().decode(releaseKeystoreB64.trim()))
+                storeFile = store
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     sourceSets["main"].java.srcDir("../remote-protocol/src/main/kotlin")
@@ -28,7 +45,10 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     lint { checkReleaseBuilds = false }

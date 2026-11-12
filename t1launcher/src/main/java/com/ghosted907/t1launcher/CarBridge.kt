@@ -236,10 +236,17 @@ class CarBridge(private val context: Context) {
         }
     }
 
-    fun openAvm() {
-        try {
+    fun openAvm(): Boolean {
+        val service = runCatching {
             context.startService(Intent().setClassName("com.autolink.app.avm", "com.autolink.app.avm.AvmService").putExtra("key_type", 1))
-        } catch (_: Exception) { note = "تعذر فتح كاميرا ٣٦٠" }
+        }.getOrNull()
+        if (service != null) return true
+        val activity = context.packageManager.getLaunchIntentForPackage("com.autolink.app.avm")
+        val opened = activity != null && runCatching {
+            context.startActivity(activity.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+        }.getOrDefault(false)
+        if (!opened) note = "كاميرا ٣٦٠ غير متاحة على هذا الجهاز"
+        return opened
     }
 
     private fun <T> transact(binder: IBinder, descriptor: String, code: Int, write: Parcel.() -> Unit, read: Parcel.() -> T): T {

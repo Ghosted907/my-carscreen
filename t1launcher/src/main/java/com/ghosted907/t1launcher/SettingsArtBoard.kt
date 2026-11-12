@@ -11,7 +11,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +49,23 @@ import kotlin.math.roundToInt
 
 private data class InkStroke(val color: Int, val points: List<Offset>)
 private enum class ArtMode(val label: String) { Text("نص"), Draw("رسم"), Sticker("ملصقات") }
+// Bundled OFL fonts (Google Fonts) so the same faces show on the car, plus the system families.
+// Order matters: the saved choice is an index, keep existing entries first.
+private val artFonts = listOf(
+    "عربي" to FontFamily(Font(R.font.arabic)),
+    "حديث / Modern" to FontFamily.SansSerif,
+    "تقليدي / Serif" to FontFamily.Serif,
+    "يدوي / Handwriting" to FontFamily.Cursive,
+    "أحادي / Mono" to FontFamily.Monospace,
+    "القاهرة Cairo" to FontFamily(Font(R.font.art_cairo)),
+    "تجوال Tajawal" to FontFamily(Font(R.font.art_tajawal)),
+    "أميري Amiri" to FontFamily(Font(R.font.art_amiri)),
+    "ريم كوفي Reem Kufi" to FontFamily(Font(R.font.art_reemkufi)),
+    "Lalezar عريض" to FontFamily(Font(R.font.art_lalezar)),
+    "Orbitron" to FontFamily(Font(R.font.art_orbitron)),
+    "Bebas Neue" to FontFamily(Font(R.font.art_bebas)),
+    "Pacifico" to FontFamily(Font(R.font.art_pacifico))
+)
 
 @Composable
 fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
@@ -56,6 +76,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
     var captionX by remember { mutableFloatStateOf(prefs.getFloat("caption_x", .04f)) }
     var captionY by remember { mutableFloatStateOf(prefs.getFloat("caption_y", .36f).coerceAtLeast(.32f)) }
     var captionSize by remember { mutableFloatStateOf(prefs.getFloat("caption_size", 28f)) }
+    var fontIndex by remember { mutableIntStateOf(prefs.getInt("caption_font", 0).coerceIn(0, artFonts.lastIndex)) }
     var captionColor by remember { mutableIntStateOf(prefs.getInt("caption_color", if (day) AndroidColor.rgb(25, 55, 43) else AndroidColor.WHITE)) }
     var drawColor by remember { mutableIntStateOf(prefs.getInt("draw_color", AndroidColor.rgb(229, 185, 71))) }
     var stickerVisible by remember { mutableStateOf(prefs.getBoolean("sticker", true)) }
@@ -107,13 +128,11 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
         }
         prefs.edit().putString("strokes", array.toString()).apply()
     }
-    var hue by remember { mutableFloatStateOf(45f) }
-    var saturation by remember { mutableFloatStateOf(.8f) }
-    var brightness by remember { mutableFloatStateOf(.9f) }
-    val selected = Color(AndroidColor.HSVToColor(floatArrayOf(hue, saturation, brightness)))
     val textColor = if (day) T1Colors.dayText else Color.White
-    fun changePalette(h: Float = hue, s: Float = saturation, v: Float = brightness) {
-        hue = h; saturation = s; brightness = v
+    fun changePalette(x: Float, y: Float) {
+        val h = (x * 360f).coerceIn(0f, 359.9f)
+        val s = if (y < .5f) (y * 2f).coerceIn(0f, 1f) else 1f
+        val v = if (y < .5f) 1f else ((1f - y) * 2f).coerceIn(0f, 1f)
         val argb = AndroidColor.HSVToColor(floatArrayOf(h, s, v))
         if (mode == ArtMode.Text) {
             captionColor = argb
@@ -121,13 +140,6 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
         } else {
             drawColor = argb
             prefs.edit().putInt("draw_color", argb).apply()
-        }
-    }
-    LaunchedEffect(mode) {
-        if (mode != ArtMode.Sticker) {
-            val values = FloatArray(3)
-            AndroidColor.colorToHSV(if (mode == ArtMode.Text) captionColor else drawColor, values)
-            hue = values[0]; saturation = values[1]; brightness = values[2]
         }
     }
     val board = RoundedCornerShape(10.dp)
@@ -155,16 +167,17 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                 prefs.edit().putString("caption", it).apply()
             }, readOnly = mode != ArtMode.Text,
                 textStyle = TextStyle(color = Color(captionColor), fontSize = captionSize.sp,
-                    fontWeight = FontWeight.Medium, fontFamily = FontFamily(Font(R.font.arabic))),
+                    fontWeight = FontWeight.Medium, fontFamily = artFonts[fontIndex].second),
                 modifier = Modifier.align(Alignment.TopStart)
                     .offset { IntOffset((captionX * widthPx).roundToInt(), (captionY * heightPx).roundToInt()) }
                     .width((maxWidth * .42f).coerceIn(200.dp, 560.dp))
                     .then(if (mode == ArtMode.Text) Modifier.pointerInput(widthPx, heightPx) {
-                        detectDragGestures { change, drag ->
-                            change.consume()
-                            captionX = (captionX - drag.x / widthPx).coerceIn(0f, .70f)
-                            captionY = (captionY + drag.y / heightPx).coerceIn(.32f, .85f)
-                            prefs.edit().putFloat("caption_x", captionX).putFloat("caption_y", captionY).apply()
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            captionX = (captionX - pan.x / widthPx).coerceIn(0f, .70f)
+                            captionY = (captionY + pan.y / heightPx).coerceIn(.32f, .85f)
+                            captionSize = (captionSize * zoom).coerceIn(16f, 120f)
+                            prefs.edit().putFloat("caption_x", captionX).putFloat("caption_y", captionY)
+                                .putFloat("caption_size", captionSize).apply()
                         }
                     } else Modifier),
                 decorationBox = { inner ->
@@ -195,11 +208,12 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                 modifier = Modifier.offset { IntOffset((stickerX * widthPx).roundToInt(), (stickerY * heightPx).roundToInt()) }
                     .size(stickerSize.dp)
                     .then(if (mode == ArtMode.Sticker) Modifier.pointerInput(widthPx, heightPx) {
-                        detectDragGestures { change, drag ->
-                            change.consume()
-                            stickerX = (stickerX - drag.x / widthPx).coerceIn(0f, (1f - stickerSizePx / widthPx).coerceAtLeast(0f))
-                            stickerY = (stickerY + drag.y / heightPx).coerceIn(0f, (1f - stickerSizePx / heightPx).coerceAtLeast(0f))
-                            prefs.edit().putFloat("sticker_x", stickerX).putFloat("sticker_y", stickerY).apply()
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            stickerSize = (stickerSize * zoom).coerceIn(40f, 320f)
+                            stickerX = (stickerX - pan.x / widthPx).coerceIn(0f, (1f - stickerSizePx / widthPx).coerceAtLeast(0f))
+                            stickerY = (stickerY + pan.y / heightPx).coerceIn(0f, (1f - stickerSizePx / heightPx).coerceAtLeast(0f))
+                            prefs.edit().putFloat("sticker_x", stickerX).putFloat("sticker_y", stickerY)
+                                .putFloat("sticker_size", stickerSize).apply()
                         }
                     } else Modifier), contentScale = ContentScale.Fit)
         }
@@ -208,11 +222,12 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                 .offset { IntOffset((customX * widthPx).roundToInt(), (customY * heightPx).roundToInt()) }
                 .size(customSize.dp)
                 .then(if (mode == ArtMode.Sticker) Modifier.pointerInput(widthPx, heightPx) {
-                    detectDragGestures { change, drag ->
-                        change.consume()
-                        customX = (customX - drag.x / widthPx).coerceIn(0f, (1f - customSizePx / widthPx).coerceAtLeast(0f))
-                        customY = (customY + drag.y / heightPx).coerceIn(0f, (1f - customSizePx / heightPx).coerceAtLeast(0f))
-                        prefs.edit().putFloat("custom_x", customX).putFloat("custom_y", customY).apply()
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        customSize = (customSize * zoom).coerceIn(40f, 320f)
+                        customX = (customX - pan.x / widthPx).coerceIn(0f, (1f - customSizePx / widthPx).coerceAtLeast(0f))
+                        customY = (customY + pan.y / heightPx).coerceIn(0f, (1f - customSizePx / heightPx).coerceAtLeast(0f))
+                        prefs.edit().putFloat("custom_x", customX).putFloat("custom_y", customY)
+                            .putFloat("custom_size", customSize).apply()
                     }
                 } else Modifier), contentScale = ContentScale.Fit)
         }
@@ -237,46 +252,47 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                 }) { Text(if (stickerVisible) "إخفاء الملصق" else "إظهار الملصق") }
             }
             if (mode == ArtMode.Text) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("خط عربي · حجم النص", color = textColor, fontSize = 12.sp)
-                    TextButton(onClick = { captionSize = (captionSize - 2f).coerceAtLeast(16f); prefs.edit().putFloat("caption_size", captionSize).apply() }) { Text("−") }
-                    Text("${captionSize.toInt()}", color = textColor)
-                    TextButton(onClick = { captionSize = (captionSize + 2f).coerceAtMost(72f); prefs.edit().putFloat("caption_size", captionSize).apply() }) { Text("+") }
-                    Text("اسحب النص لتغيير موقعه", color = textColor, fontSize = 11.sp)
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("اسحب النص لتحريكه، وبإصبعين لتغيير حجمه", color = textColor, fontSize = 12.sp)
+                    Spacer(Modifier.width(6.dp))
+                    artFonts.forEachIndexed { index, (label, family) ->
+                        FilterChip(selected = fontIndex == index, onClick = {
+                            fontIndex = index; prefs.edit().putInt("caption_font", index).apply()
+                        }, label = { Text(label, fontFamily = family, fontSize = 11.sp) })
+                    }
                 }
             }
             if (mode == ArtMode.Sticker) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("حجم النخلة والسيفين", color = textColor, fontSize = 12.sp)
-                    TextButton(onClick = { stickerSize = (stickerSize - 10f).coerceAtLeast(40f); prefs.edit().putFloat("sticker_size", stickerSize).apply() }) { Text("−") }
-                    Text("${stickerSize.toInt()}", color = textColor)
-                    TextButton(onClick = { stickerSize = (stickerSize + 10f).coerceAtMost(240f); prefs.edit().putFloat("sticker_size", stickerSize).apply() }) { Text("+") }
-                    if (customBitmap != null) {
-                        Spacer(Modifier.width(24.dp))
-                        Text("حجم الملصق المضاف", color = textColor, fontSize = 12.sp)
-                        TextButton(onClick = { customSize = (customSize - 10f).coerceAtLeast(40f); prefs.edit().putFloat("custom_size", customSize).apply() }) { Text("−") }
-                        Text("${customSize.toInt()}", color = textColor)
-                        TextButton(onClick = { customSize = (customSize + 10f).coerceAtMost(240f); prefs.edit().putFloat("custom_size", customSize).apply() }) { Text("+") }
-                    }
-                }
+                Text("اسحب الملصق لتحريكه، وبإصبعين لتغيير حجمه", color = textColor, fontSize = 12.sp)
             }
             if (mode == ArtMode.Draw || mode == ArtMode.Text) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (mode == ArtMode.Text) "لون النص" else "لون الرسم", color = textColor)
-                    Canvas(Modifier.padding(horizontal = 8.dp).width(150.dp).height(28.dp)
-                        .pointerInput(mode, saturation, brightness) {
-                            detectTapGestures { point -> changePalette(h = (point.x / size.width * 360f).coerceIn(0f, 360f)) }
+                    Canvas(Modifier.padding(horizontal = 8.dp).width(320.dp).height(72.dp)
+                        .pointerInput(mode) {
+                            detectTapGestures { point -> changePalette(point.x / size.width, point.y / size.height) }
+                        }
+                        .pointerInput(mode) {
+                            // Slide a finger across the board to pick continuously.
+                            detectDragGestures(onDragStart = { p -> changePalette((p.x / size.width).coerceIn(0f, 1f), (p.y / size.height).coerceIn(0f, 1f)) }) { change, _ ->
+                                change.consume()
+                                changePalette((change.position.x / size.width).coerceIn(0f, 1f), (change.position.y / size.height).coerceIn(0f, 1f))
+                            }
                         }) {
-                        drawRect(Brush.horizontalGradient(listOf(Color.Red, Color.Yellow, Color.Green,
-                            Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
+                        val cellW = size.width / 60f; val cellH = size.height / 24f
+                        repeat(60) { x -> repeat(24) { y ->
+                            val py = y / 23f
+                            val sat = if (py < .5f) py * 2f else 1f
+                            val value = if (py < .5f) 1f else (1f - py) * 2f
+                            drawRect(Color(AndroidColor.HSVToColor(floatArrayOf(x * 6f, sat, value))),
+                                topLeft = Offset(x * cellW, y * cellH),
+                                size = androidx.compose.ui.geometry.Size(cellW + 1f, cellH + 1f))
+                        } }
                     }
-                    Box(Modifier.padding(horizontal = 8.dp).size(30.dp).background(selected, RoundedCornerShape(5.dp)))
-                    Text("درجة", color = textColor, fontSize = 12.sp)
-                    Slider(hue, { changePalette(h = it) }, valueRange = 0f..360f, modifier = Modifier.weight(2f))
-                    Text("تشبع", color = textColor, fontSize = 12.sp)
-                    Slider(saturation, { changePalette(s = it) }, modifier = Modifier.weight(1f))
-                    Text("سطوع", color = textColor, fontSize = 12.sp)
-                    Slider(brightness, { changePalette(v = it) }, modifier = Modifier.weight(1f))
+                    Box(Modifier.padding(horizontal = 8.dp).size(36.dp)
+                        .border(1.dp, textColor, RoundedCornerShape(5.dp))
+                        .background(Color(if (mode == ArtMode.Text) captionColor else drawColor), RoundedCornerShape(5.dp)))
                 }
             }
         }

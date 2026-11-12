@@ -86,7 +86,7 @@ object SignalCatalog {
         hal("turn_right", "الإشارة اليمنى", SignalGroup.LIGHTS, 557843646, "", max = 1.0, labels = onOff, confirmed = true, period = 500),
         hal("low_beam", "الضوء المنخفض", SignalGroup.LIGHTS, 557843647, "", max = 1.0, labels = onOff, confirmed = true, period = 500),
         hal("high_beam", "الضوء العالي", SignalGroup.LIGHTS, 557843648, "", max = 1.0, labels = onOff, confirmed = true, period = 500),
-        hal("hazard", "إشارة الخطر · خام", SignalGroup.LIGHTS, 557843346),
+        hal("hazard", "وميض فرملة الطوارئ · خام", SignalGroup.LIGHTS, 557843346),
         ci("theme", "قالب العدادات", SignalGroup.SYSTEM, 206, "", max = 3.0, min = 1.0, confirmed = true,
             labels = mapOf(1 to "رقمي", 2 to "كلاسيكي", 3 to "ملاحة")),
         ci("font", "خط العدادات", SignalGroup.SYSTEM, 216, "", max = 2.0, min = 1.0, confirmed = true),

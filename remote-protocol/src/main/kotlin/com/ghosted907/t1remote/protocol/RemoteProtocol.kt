@@ -17,7 +17,7 @@ object RemoteProtocol {
     const val PORT = 47231
     const val SERVICE_TYPE = "_t1remote._tcp."
     const val SERVICE_NAME = "T1 Launcher"
-    const val MAX_LINE = 16 * 1024
+    const val MAX_LINE = 1024 * 1024
     const val HOLD_MS = 1000L
 
     const val OP_PING = "ping"
@@ -29,7 +29,9 @@ object RemoteProtocol {
     const val OP_CLOSE = "close"
     const val OP_RESIZE = "resize"
     const val OP_VEHICLE = "vehicle"
-    val OPS = setOf(OP_PING, OP_APPS, OP_TASKS, OP_OPEN, OP_MOVE, OP_FRONT, OP_CLOSE, OP_RESIZE, OP_VEHICLE)
+    const val OP_ART = "art"
+    const val OP_ART_CLEAR = "art_clear"
+    val OPS = setOf(OP_PING, OP_APPS, OP_TASKS, OP_OPEN, OP_MOVE, OP_FRONT, OP_CLOSE, OP_RESIZE, OP_VEHICLE, OP_ART, OP_ART_CLEAR)
 
     const val SCREEN_MAIN = "main"
     const val SCREEN_CLUSTER = "cluster"
@@ -88,7 +90,13 @@ object RemoteProtocol {
         val op = body.optString("op")
         if (op !in OPS) return "أمر غير معروف"
         return when (op) {
-            OP_PING, OP_APPS, OP_TASKS -> null
+            OP_PING, OP_APPS, OP_TASKS, OP_ART_CLEAR -> null
+            OP_ART -> when {
+                body.optString("image").length !in 1..900000 -> "حجم الصورة غير صالح"
+                !body.optDouble("x").let { it.isFinite() && it in 0.0..1.0 } -> "الموضع غير صالح"
+                !body.optDouble("y").let { it.isFinite() && it in 0.0..1.0 } -> "الموضع غير صالح"
+                else -> null
+            }
             OP_OPEN, OP_MOVE -> when {
                 !validPackage(body.optString("pkg")) -> "اسم التطبيق غير صالح"
                 body.optString("screen") !in SCREENS -> "الشاشة غير صالحة"

@@ -50,6 +50,12 @@ object JctOverlay {
     fun dp(context: Context, v: Int): Int = Math.round(v * context.resources.displayMetrics.density)
 }
 
+object JctFloatingStyle {
+    const val KEY = "floating_style"
+    val labels = listOf("أيقونة التطبيق فقط", "دائري", "مربع", "مخفي", "كبسولة")
+    fun selected(context: Context) = JctStore.int(context, KEY, 1).coerceIn(0, labels.lastIndex)
+}
+
 /**
  * Port of NaviStart `e0.w0` + `e0.v0`: draggable overlay window whose position is saved in
  * "<name>X"/"<name>Y" (default screen centre). Long-press 500 ms enters move mode (blinking
@@ -218,12 +224,29 @@ class JctLounchService : Service() {
         if (!on && !multiOn) { stopSelf(); return START_NOT_STICKY }
         if (on) {
             val root = FrameLayout(this)
+            val style = JctFloatingStyle.selected(this)
+            // Show the icon of the app the button opens (fallback: T1 logo).
+            val action = JctActions.parse(JctStore.str(this, JctStore.LOUNCHB_ACTION, JctActions.NOT_VALUE))
+            val appIcon = if (action.type == JctType.APP && action.pkg != null)
+                runCatching { packageManager.getApplicationIcon(action.pkg) }.getOrNull() else null
             val img = ImageView(this).apply {
-                setImageResource(R.drawable.ic_t1)
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#F0123827")); setStroke(JctOverlay.dp(context, 3), Color.parseColor("#D4A84B")) }
+                if (appIcon != null) setImageDrawable(appIcon) else setImageResource(R.drawable.ic_t1)
+                background = if (style == 0 || style == 3) null else GradientDrawable().apply {
+                    shape = if (style == 1) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
+                    cornerRadius = JctOverlay.dp(context, if (style == 4) 50 else 16).toFloat()
+                    setColor(Color.parseColor("#F0123827"))
+                    setStroke(JctOverlay.dp(context, 3), Color.parseColor("#D4A84B"))
+                }
                 val p = JctOverlay.dp(context, 20); setPadding(p, p, p, p)
+                if (style == 3) alpha = 0f
             }
-            root.addView(img, FrameLayout.LayoutParams(JctOverlay.dp(this, 100), JctOverlay.dp(this, 100)))
+            val w = JctOverlay.dp(this, if (style == 4) 140 else 100)
+            root.addView(img, FrameLayout.LayoutParams(w, JctOverlay.dp(this, 100)))
+            if (style != 3) {
+                // Smooth appearance instead of popping in.
+                img.alpha = 0f; img.scaleX = .6f; img.scaleY = .6f
+                img.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).start()
+            }
             single = JctDragWindow(this, "LounchB").also {
                 it.attach(root, JctOverlay.windowManager(this), root) { JctLaunch.runKey(this, JctStore.LOUNCHB_ACTION) }
             }

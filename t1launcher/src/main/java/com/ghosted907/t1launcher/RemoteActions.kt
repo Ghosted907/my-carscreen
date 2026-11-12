@@ -33,12 +33,15 @@ class RemoteActions(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private val vehicle by lazy { VehicleControl(context) }
     private var vehicleUsed = false
+    private val art = RemoteArt(context)
 
     fun run(body: JSONObject): Out = when (body.getString("op")) {
         RemoteProtocol.OP_PING -> Out(true, "متصل", JSONObject()
             .put("vehicle", RemoteStore.vehicleAllowed(context))
             .put("freeform", HomeAppWindows.freeformEnabled(context))
-            .put("cluster", clusterIndex() >= 0))
+            .put("cluster", clusterIndex() >= 0)
+            .put("art", true)
+            .put("close", ClusterForceClose.ENABLED))
         RemoteProtocol.OP_APPS -> apps()
         RemoteProtocol.OP_TASKS -> tasks()
         RemoteProtocol.OP_OPEN, RemoteProtocol.OP_MOVE -> open(body.getString("pkg"), body.getString("screen"))
@@ -46,6 +49,9 @@ class RemoteActions(private val context: Context) {
         RemoteProtocol.OP_CLOSE -> close(body.getString("pkg"))
         RemoteProtocol.OP_RESIZE -> resize(body.getString("pkg"), body.getString("preset"))
         RemoteProtocol.OP_VEHICLE -> vehicle(body.getString("cmd"))
+        RemoteProtocol.OP_ART -> onMain { art.show(body) } ?: Out(false, "تعذر عرض اللوحة")
+        RemoteProtocol.OP_ART_CLEAR -> onMain { art.clear(); Out(true, "تم إخفاء اللوحة") }
+            ?: Out(false, "تعذر إخفاء اللوحة")
         else -> Out(false, "أمر غير معروف")
     }
 
@@ -101,17 +107,20 @@ class RemoteActions(private val context: Context) {
         if (!ok) return Out(false, "تعذّر فتح ${label(pkg)}؛ قد تحتاج T1 صلاحية الظهور فوق التطبيقات")
         RemoteStore.rememberScreen(context, pkg, screen)
         val where = if (screen == RemoteProtocol.SCREEN_CLUSTER) "العدادات" else "الشاشة الرئيسية"
-        return Out(true, "${label(pkg)} على $where")
+        return Out(true, "طُلب فتح ${label(pkg)} على $where؛ تحقق من ظهور التطبيق")
     }
 
     private fun close(pkg: String): Out {
         if (!allowedApp(pkg)) return Out(false, "هذا التطبيق غير مسموح")
+        if (!ClusterForceClose.ENABLED) return Out(false, "إغلاق التطبيق الظاهر غير متاح في هذا الإصدار")
         val result = AtomicReference<String>()
         val latch = CountDownLatch(1)
         main.post { ClusterForceClose.close(context, pkg) { result.set(it); latch.countDown() } }
         if (!latch.await(8, TimeUnit.SECONDS)) return Out(false, "لم يرد اللانشر في الوقت")
-        RemoteStore.forget(context, pkg)
-        return Out(true, result.get())
+        val msg = result.get()
+        val closed = msg.startsWith("أُغلق")
+        if (closed) RemoteStore.forget(context, pkg)
+        return Out(closed, msg)
     }
 
     private fun resize(pkg: String, preset: String): Out {
@@ -155,5 +164,5 @@ class RemoteActions(private val context: Context) {
         return r.get()
     }
 
-    fun close() { if (vehicleUsed) vehicle.close() }
+    fun close() { art.clear(); if (vehicleUsed) vehicle.close() }
 }

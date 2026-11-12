@@ -71,22 +71,18 @@ fun HeroVehicleLights(snap: CarBridge.Snap, modifier: Modifier = Modifier,
     val masks = remember(context) { createLampMasks(context) }
     val leftRaw = snap.reading("turn_left").current
     val rightRaw = snap.reading("turn_right").current
-    val hazardRaw = snap.reading("hazard").current
     val low = snap.reading("low_beam").current == 1.0
     val high = snap.reading("high_beam").current == 1.0
     var tick by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     var leftOnAt by remember { mutableLongStateOf(0L) }
     var rightOnAt by remember { mutableLongStateOf(0L) }
-    var hazardOnAt by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(leftRaw, rightRaw, hazardRaw, demoMode) {
+    LaunchedEffect(leftRaw, rightRaw, demoMode) {
         val now = SystemClock.elapsedRealtime()
         if (leftRaw == 1.0) leftOnAt = now
         if (rightRaw == 1.0) rightOnAt = now
-        if (hazardRaw == 1.0) hazardOnAt = now
-        while (demoMode != LampDemoMode.NONE || leftRaw == 1.0 || rightRaw == 1.0 || hazardRaw == 1.0 ||
+        while (demoMode != LampDemoMode.NONE || leftRaw == 1.0 || rightRaw == 1.0 ||
             (leftRaw == 0.0 && SystemClock.elapsedRealtime() - leftOnAt < 700L) ||
-            (rightRaw == 0.0 && SystemClock.elapsedRealtime() - rightOnAt < 700L) ||
-            (hazardRaw == 0.0 && SystemClock.elapsedRealtime() - hazardOnAt < 700L)) {
+            (rightRaw == 0.0 && SystemClock.elapsedRealtime() - rightOnAt < 700L)) {
             tick = SystemClock.elapsedRealtime()
             delay(80)
         }
@@ -97,9 +93,7 @@ fun HeroVehicleLights(snap: CarBridge.Snap, modifier: Modifier = Modifier,
     val right = if (demoMode == LampDemoMode.NONE)
         rightRaw == 1.0 || (rightRaw == 0.0 && tick - rightOnAt < 700L)
         else demoMode == LampDemoMode.RIGHT
-    val hazard = if (demoMode == LampDemoMode.NONE)
-        hazardRaw == 1.0 || (hazardRaw == 0.0 && tick - hazardOnAt < 700L)
-        else demoMode == LampDemoMode.HAZARD
+    val hazard = demoMode == LampDemoMode.HAZARD
     val blink = (tick / 500L) % 2L == 0L
     val beam by animateFloatAsState(if (high) 1f else if (low) .55f else 0f,
         animationSpec = tween(140), label = "headlight brightness")

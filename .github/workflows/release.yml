@@ -42,7 +42,7 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease :t1launcher:assembleRelease --stacktrace
+        run: ./gradlew :app:assembleRelease :t1launcher:assembleRelease :t1remote:assembleRelease :t1launcher:testDebugUnitTest :t1remote:testDebugUnitTest --stacktrace
 
       - name: Write dist/apps.json and publish
         env:
@@ -60,6 +60,7 @@ jobs:
               data = pathlib.Path(path).read_bytes()
               return hashlib.sha256(data).hexdigest(), len(data)
           t1_code, t1_name = gradle_version("t1launcher/build.gradle.kts")
+          remote_code, remote_name = gradle_version("t1remote/build.gradle.kts")
           app_code, app_name = gradle_version("app/build.gradle.kts")
           t1_apk = pathlib.Path("t1launcher/build/outputs/apk/release/t1launcher-release.apk")
           app_apk = pathlib.Path("app/build/outputs/apk/release/app-release.apk")
@@ -67,10 +68,13 @@ jobs:
               raise SystemExit(f"missing apk: {t1_apk} {app_apk}")
           t1_sha, t1_size = apk_info(t1_apk)
           app_sha, app_size = apk_info(app_apk)
+          remote_apk = pathlib.Path("t1remote/build/outputs/apk/release/t1remote-release.apk")
+          remote_sha, remote_size = apk_info(remote_apk)
           base = "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist"
           manifest = {
               "tag": os.environ.get("GITHUB_REF_NAME", ""),
               "apps": [
+                  {"id": "t1remote", "name": "T1 Remote · تطبيق الجوال", "package": "com.ghosted907.t1remote", "versionCode": remote_code, "versionName": remote_name, "apk": f"{base}/t1remote-release.apk", "sha256": remote_sha, "size": remote_size, "external": False, "postInstall": [], "notes": "يثبت على الجوال. الرسم والكتابة والملصقات والصور على العدادات عبر الشبكة المحلية بدون رمز اقتران."},
                   {
                       "id": "t1launcher",
                       "name": "T1",
@@ -167,19 +171,20 @@ jobs:
           (out / "apps.json").write_text(json.dumps(manifest, indent=2) + "\n")
           (out / "t1launcher-release.apk").write_bytes(t1_apk.read_bytes())
           (out / "clusterdiag-release.apk").write_bytes(app_apk.read_bytes())
+          (out / "t1remote-release.apk").write_bytes(remote_apk.read_bytes())
           print((out / "apps.json").read_text())
           PY
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           WORK=$(mktemp -d)
-          cp dist-out/apps.json dist-out/t1launcher-release.apk dist-out/clusterdiag-release.apk "$WORK/"
+          cp dist-out/apps.json dist-out/t1launcher-release.apk dist-out/clusterdiag-release.apk dist-out/t1remote-release.apk "$WORK/"
           cd "$WORK"
           git init -b dist
-          git add apps.json t1launcher-release.apk clusterdiag-release.apk
+          git add apps.json t1launcher-release.apk clusterdiag-release.apk t1remote-release.apk
           git commit -m "Publish ${GITHUB_REF_NAME} release"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dist
           gh release create "${GITHUB_REF_NAME}" \
-            apps.json t1launcher-release.apk clusterdiag-release.apk \
+            apps.json t1launcher-release.apk clusterdiag-release.apk t1remote-release.apk \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
             --notes "Signed release. The browser installer reads https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/apps.json"

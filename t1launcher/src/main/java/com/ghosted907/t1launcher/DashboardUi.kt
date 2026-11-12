@@ -227,9 +227,11 @@ private fun SaudiTrim(modifier: Modifier) {
 
 @Composable
 private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)
-        .heightIn(min = 48.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = muted(day), fontSize = 13.sp)
+    Box(Modifier.clip(RoundedCornerShape(8.dp))
+        .border(1.dp, accent(day).copy(alpha = .28f), RoundedCornerShape(8.dp))
+        .clickable(onClick = onClick)
+        .widthIn(min = 72.dp).heightIn(min = 48.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        Text(label, color = ink(day), fontSize = 14.sp)
     }
 }
 
@@ -242,13 +244,6 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
              onScrolling: (Boolean) -> Unit = {},
              oemApps: List<LaunchableApp> = emptyList()) {
     val scroll = rememberScrollState()
-    var lampDemo by remember { mutableStateOf(LampDemoMode.NONE) }
-    LaunchedEffect(lampDemo) {
-        if (lampDemo != LampDemoMode.NONE) {
-            delay(20_000)
-            lampDemo = LampDemoMode.NONE
-        }
-    }
     // Visible part of the page (root coordinates); docked windows are clipped to it.
     var viewport by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     LaunchedEffect(scroll.isScrollInProgress) { onScrolling(scroll.isScrollInProgress) }
@@ -279,7 +274,7 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                     Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
                         contentDescription = "سيارة جيتور T1", modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit)
-                    HeroVehicleLights(snap, demoMode = lampDemo)
+                    HeroVehicleLights(snap)
                 }
                 HomeDateTime(compact, Modifier.align(Alignment.Center)
                     .offset(x = if (compact) 230.dp else 300.dp))
@@ -310,14 +305,14 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                 SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             }
             Row(Modifier.fillMaxWidth().height(dockHeight), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HomeAppTile("مابس", waze, day, dockEnabled,
+                HomeAppTile("خرائط", waze, day, dockEnabled,
                     Modifier.weight(1.2f), viewport, onDockBounds, onExpand)
                 HomeAppTile("يوتيوب", youtube, day, dockEnabled,
                     Modifier.weight(1f), viewport, onDockBounds, onExpand)
             }
             OemAppShortcuts(day, oemApps)
             HomeVehicleTelemetry(day, snap, telemetryHeight)
-            HomeLampDemo(day, lampDemo) { lampDemo = it }
+            HomeLampReadings(day, snap)
             if (compact) HomeNoteTile(day, Modifier.fillMaxWidth())
             if (!compact) Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -354,32 +349,18 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
 }
 
 @Composable
-private fun HomeLampDemo(day: Boolean, selected: LampDemoMode,
-                         onSelect: (LampDemoMode) -> Unit) {
+private fun HomeLampReadings(day: Boolean, snap: CarBridge.Snap) {
     Column(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("تجربة أنوار صورة السيارة", color = ink(day), fontSize = 17.sp,
+        Text("حالة أنوار السيارة", color = ink(day), fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold)
-        Text("تجربة مرئية لمدة ٢٠ ثانية. لا ترسل أمراً إلى السيارة؛ مسار تشغيل الإشارات والفلشر غير موثّق في ملفات T1.",
+        Text("تُعرض القراءات المباشرة عند اتصال السيارة. التحكم بالأنوار غير متاح حتى تُوثّق واجهة الأوامر وصلاحياتها على جيتور T1.",
             color = muted(day), fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                "إيقاف التجربة" to LampDemoMode.NONE,
-                "إشارة يسار" to LampDemoMode.LEFT,
-                "إشارة يمين" to LampDemoMode.RIGHT,
-                "فلشر" to LampDemoMode.HAZARD
-            ).forEach { (label, mode) ->
-                val active = selected == mode
-                Box(Modifier.weight(1f).heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (active) accent(day).copy(alpha = .20f) else surface(day))
-                    .border(1.dp, if (active) accent(day) else accent(day).copy(alpha = .25f),
-                        RoundedCornerShape(8.dp))
-                    .clickable { onSelect(mode) }, contentAlignment = Alignment.Center) {
-                    Text(label, color = if (active) accent(day) else ink(day), fontSize = 14.sp,
-                        textAlign = TextAlign.Center, maxLines = 1)
-                }
-            }
+            LightPill("إشارة يسار", snap.reading("turn_left"), day)
+            LightPill("إشارة يمين", snap.reading("turn_right"), day)
+            LightPill("واطي", snap.reading("low_beam"), day)
+            LightPill("عالي", snap.reading("high_beam"), day)
         }
     }
 }
@@ -403,6 +384,7 @@ private fun HomeAppTile(title: String, app: LaunchableApp?, day: Boolean,
         Box(Modifier.fillMaxWidth().weight(1f).padding(3.dp)
             .clip(RoundedCornerShape(5.dp))
             .background(if (day) Color(0xFFE9EAD9) else Color(0xFF0B1411))
+            .clickable(enabled = app != null) { app?.let(onExpand) }
             .onGloballyPositioned { coordinates ->
                 if (dockEnabled && app != null) {
                     // Clip the slot to the visible page so a window never covers the bars or shortcuts.
@@ -416,11 +398,15 @@ private fun HomeAppTile(title: String, app: LaunchableApp?, day: Boolean,
                         (origin[1] + root.bottom).roundToInt()))
                 }
             }, contentAlignment = Alignment.Center) {
-            Text(when {
-                app == null -> "$title غير مثبت"
-                !dockEnabled -> "فعّل النوافذ العائمة لعرض التطبيق هنا"
-                else -> "جاري عرض $title"
-            }, color = muted(day), fontSize = 13.sp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (app != null) AppArtwork(app)
+                Text(when {
+                    app == null -> "$title غير مثبت"
+                    !dockEnabled -> "اضغط لفتح $title · العرض المصغّر يحتاج النوافذ العائمة"
+                    else -> "اضغط لفتح $title"
+                }, color = muted(day), fontSize = 13.sp)
+            }
         }
     }
 }

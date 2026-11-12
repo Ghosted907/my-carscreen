@@ -29,14 +29,13 @@ The home hero shows a Saudi analog clock with the crossed swords and palm inside
 time drives its hands, and equal-size numeric Gregorian and Arabic-digit Umm al-Qura Hijri dates sit
 at the bottom of the dial. The Riyadh-time greeting and OEM outside-temperature reading remain. A compass,
 four tire pressures and temperatures, and the new half-open-tailgate T1 image sit below the app cards.
-The T1 hero headlamps now follow live left/right indicators, hazard, low beam and high beam readings.
+The T1 hero headlamps follow live left/right indicator, low beam and high beam readings.
 Amber indicators flash around the lamp housings; a white projector stays lit with low beam and grows
-brighter with high beam. Outside the visual test, stale or unavailable readings never light the graphic. The indicator reference
+brighter with high beam. Stale or unavailable readings never light the graphic. The indicator reference
 is `../../../screenshots/اشارات/فليشرpng.png`; actual timing and side mapping require an on-car check.
-The Home page has a 20-second visual test for left, right and hazard lamps. It does not send a vehicle
-command. The available T1 files identify `KeyVehiclePropertyHAZARD` as emergency-brake flashing,
-not the hazard switch, and provide no verified left/right indicator command; these controls must not
-be wired to that unrelated property. The panel labels this distinction clearly.
+The Home page shows read-only live lamp states. The old visual-test buttons have been removed.
+The available T1 files identify `KeyVehiclePropertyHAZARD` as emergency-brake flashing,
+not the hazard switch, and provide no verified indicator or beam command. No lamp command is sent.
 The navigation quick tile is replaced by a saved note. The home vehicle panel now shows the
 half-open T1 cutout, the live tailgate height when connected, and a clearly disabled open button.
 The OEM settings APK contains a power-liftgate key (2050), but its accessible command route and
@@ -64,7 +63,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-v1.12.5.apk
+adb install -r ..\..\t1launcher-saudi-v1.13.1.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -76,7 +75,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 30, versionName 1.12.8. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 32, versionName 1.13.1. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 1.11.0 merges Codex's 1.10.3-1.10.6 work (home clock and Hijri date, telemetry scene with the half-open tailgate image, Settings art board, control-page shortcut list removed; described above) with the NaviStart 1.11.0 additions (display-routing actions, black screen, recents, play/pause, split screen, Arabic/English app language; see the JCarTools section).
 
@@ -159,3 +158,14 @@ Open **التحكم** from the home shortcuts or the bottom navigation. The wind
 The direct tailgate motion button on Home stays disabled until its exact OEM command is documented.
 Controls opens the OEM tailgate page instead. The live speed and gear readings are shown for context,
 and unverified values are not presented as current readings.
+
+
+## 1.13.1 (local, not committed)
+* Phone control: back to plain auto-discovery (no PIN, no manual address). Anyone on the same network can
+  control while "التحكم من الجوال" is on; use the phone hotspot. Both switches stay off by default, only the
+  nine window/sunroof/sunshade ids pass, 1-second hold, no tailgate, no audio.
+* Gauges art board: 13 fonts (system + bundled OFL Google Fonts: Cairo, Tajawal, Amiri, Reem Kufi, Lalezar,
+  Orbitron, Bebas Neue, Pacifico; see FONTS-LICENSE.md), scrollable font row, colour board supports tap and slide.
+* Edge zones: the handle widens out of the edge and follows the finger while dragging, then slides back.
+* Floating button: shows the assigned app's icon, new "كبسولة" shape, fades/scales in.
+* Lights: read-only (Low 557843647, High 557843648, L/R 557843645/646). No light write path is used or added.

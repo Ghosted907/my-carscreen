@@ -74,7 +74,10 @@ class MainActivity : ComponentActivity() {
     private var expandedPackage: String? = null
     private val carListener: (CarBridge.Snap) -> Unit = { snap = it }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) beginVoice(this) { handleVoice(it) }
+        if (granted) {
+            Toast.makeText(this, "جارٍ الاستماع…", Toast.LENGTH_SHORT).show()
+            beginVoice(this) { handleVoice(it) }
+        }
         else Toast.makeText(this, "الميكروفون مرفوض", Toast.LENGTH_SHORT).show()
     }
 
@@ -109,6 +112,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumePageExtra(intent)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && page == Page.Home && freeform && !homeScrolling) {
+            // Tapping the launcher brings its task in front of the two freeform tasks. Their
+            // saved bounds are still correct, but the window order is not; request them again.
+            dockedBounds.clear()
+            scheduleHomeDock()
+        }
     }
 
     /** RUN_START_APP_MENU action opens the app list. */
@@ -177,7 +190,7 @@ class MainActivity : ComponentActivity() {
                     page = page,
                     day = day,
                     snap = snap,
-                    onPage = { navigate(it) },
+                    onPage = { if (it == Page.Camera) openCamera() else navigate(it) },
                     onMic = { voice() },
                     onOemAssistant = { OemAssistant.request(this@MainActivity) },
                     onDay = { day = !day; app.prefs.day = day }
@@ -209,12 +222,7 @@ class MainActivity : ComponentActivity() {
                                 day, snap,
                                 { classic() }, { hideAddons() }, { stock() }, { clearCluster() }
                             )
-                            Page.Camera -> SimplePage(
-                                "كاميرا ٣٦٠",
-                                "عرض كاميرات السيارة المحيطية.\nالحالة: ${if (snap.avmOpen == true) "مفتوحة" else if (snap.avmOpen == false) "مغلقة" else "غير متاحة"}",
-                                day,
-                                "كاميرا ٣٦٠"
-                            ) { app.car.openAvm() }
+                            Page.Camera -> SimplePage("كاميرا ٣٦٠", "جارٍ فتح واجهة الكاميرات", day)
                             Page.Vehicle -> VehiclePage(day, snap, app.car)
                             Page.Controls -> ControlsPage(day, snap) { quick("windows") }
                             Page.Customize -> SimplePage(
@@ -384,7 +392,7 @@ class MainActivity : ComponentActivity() {
     private fun quick(id: String) {
         val app = application as T1App
         when (id) {
-            "avm" -> app.car.openAvm()
+            "avm" -> openCamera()
             "cluster" -> navigate(Page.Cluster)
             "vehicle" -> navigate(Page.Vehicle)
             "controls" -> navigate(Page.Controls)
@@ -395,6 +403,11 @@ class MainActivity : ComponentActivity() {
             "assistant" -> OemAssistant.request(this)
             "windows" -> { showWindows = true; page = Page.Home; if (dockedBounds.isNotEmpty()) revealLauncher() }
         }
+    }
+
+    private fun openCamera() {
+        if (!(application as T1App).car.openAvm())
+            Toast.makeText(this, "كاميرا ٣٦٠ غير متاحة على هذا الجهاز", Toast.LENGTH_LONG).show()
     }
 
     private fun classic() {
@@ -440,6 +453,7 @@ class MainActivity : ComponentActivity() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         } else {
+            Toast.makeText(this, "جارٍ الاستماع…", Toast.LENGTH_SHORT).show()
             beginVoice(this) { handleVoice(it) }
         }
     }

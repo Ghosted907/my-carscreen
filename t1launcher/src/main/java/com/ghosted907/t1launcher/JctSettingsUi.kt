@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -72,11 +75,12 @@ private fun SwitchRow(label: String, checked: Boolean, day: Boolean, onChange: (
 private fun Note(text: String, day: Boolean) =
     Text(text, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
 
-private data class PickerOption(val label: String, val select: () -> Unit)
+private data class PickerOption(val label: String, val packageName: String? = null, val select: () -> Unit)
 
 /** A wide grid for app and action choices throughout launcher settings. */
 @Composable
 private fun GridPickerDialog(title: String, options: List<PickerOption>, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.80f).fillMaxHeight(.78f),
             shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
@@ -91,9 +95,18 @@ private fun GridPickerDialog(title: String, options: List<PickerOption>, onDismi
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(options) { option ->
+                        val icon = remember(option.packageName) {
+                            option.packageName?.let { pkg -> runCatching {
+                                context.packageManager.getApplicationIcon(pkg).toBitmap(48, 48).asImageBitmap()
+                            }.getOrNull() }
+                        }
                         OutlinedButton(onClick = option.select,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp),
                             shape = RoundedCornerShape(10.dp)) {
+                            if (icon != null) {
+                                Image(icon, contentDescription = null, modifier = Modifier.size(34.dp))
+                                Spacer(Modifier.width(8.dp))
+                            }
                             Text(option.label, textAlign = TextAlign.Center, maxLines = 2,
                                 fontSize = 14.sp, lineHeight = 18.sp)
                         }
@@ -127,7 +140,7 @@ private fun ActionDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     if (split) SplitDialog(onDismiss = { split = false }) { raw -> split = false; onPick(raw) }
     else GridPickerDialog(tr("اختر الإجراء", "Select action"),
         listOf(PickerOption(tr("تقسيم الشاشة بين تطبيقين…", "Split screen between two apps…")) { split = true }) +
-            items.map { raw -> PickerOption(jctLabel(context, raw)) { onPick(raw) } }, onDismiss)
+            items.map { raw -> PickerOption(jctLabel(context, raw), JctActions.parse(raw).pkg) { onPick(raw) } }, onDismiss)
 }
 
 /** Compose a two-app freeform layout from installed applications. */
@@ -161,7 +174,7 @@ private fun SplitDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
         }) { Text(tr("حفظ", "Save")) }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text(tr("إلغاء", "Cancel")) } })
     if (choosing != 0) GridPickerDialog(tr("اختر تطبيقًا من القائمة", "Choose an app from the list"),
-        apps.map { a -> PickerOption(a.label) {
+        apps.map { a -> PickerOption(a.label, a.packageName) {
             if (choosing == 1) first = a.packageName else second = a.packageName
             choosing = 0
         } }, onDismiss = { choosing = 0 })
@@ -256,7 +269,7 @@ fun JctClusterAppCard(day: Boolean) {
     if (choose) {
         val apps = remember { AppIndex.launchable(context) }
         GridPickerDialog(tr("اختر تطبيقًا من القائمة", "Choose an app from the list"),
-            apps.map { a -> PickerOption(a.label) {
+            apps.map { a -> PickerOption(a.label, a.packageName) {
                 pkg = a.packageName; JctStore.putStr(context, JctStore.PKG, pkg); choose = false
             } }, onDismiss = { choose = false })
     }
@@ -313,6 +326,8 @@ private fun FloatingCard(day: Boolean) {
     var multi by remember { mutableStateOf(JctStore.bool(context, JctStore.MULTI_ON, false)) }
     var eight by remember { mutableStateOf(JctStore.int(context, JctStore.MULTI_COUNT, 8) == 8) }
     var over by remember { mutableStateOf(JctStore.bool(context, JctStore.OVER_SYSTEM, true)) }
+    var floatingStyle by remember { mutableIntStateOf(JctFloatingStyle.selected(context)) }
+    var chooseStyle by remember { mutableStateOf(false) }
     val sync = { JctLounchService.sync(context) }
     Card(tr("الأزرار العائمة", "Floating buttons"), day) {
         if (!Settings.canDrawOverlays(context)) {
@@ -320,6 +335,7 @@ private fun FloatingCard(day: Boolean) {
             TextButton(onClick = { runCatching { LauncherDisplay.start(context, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) } }) { Text(tr("فتح إعدادات الظهور", "Open overlay settings")) }
         }
         SwitchRow(tr("عرض الزر العائم", "Show floating button"), single, day) { single = it; JctStore.putBool(context, JctStore.LOUNCHB_TRUE, it); sync() }
+        OutlinedButton(onClick = { chooseStyle = true }) { Text("شكل الزر العائم: ${JctFloatingStyle.labels[floatingStyle]}") }
         JctActionPicker(tr("زر عائم:", "Floating button:"), JctStore.LOUNCHB_ACTION, day)
         Note(tr("اضغط مطولاً على الزر ثم اسحبه لمكان لا يغطي عناصر المصنع.", "Long-press the button, then drag it where it does not cover OEM controls."), day)
         SwitchRow(tr("عرض الزر المتعدد", "Show multi-button"), multi, day) { multi = it; JctStore.putBool(context, JctStore.MULTI_ON, it); sync() }
@@ -332,6 +348,10 @@ private fun FloatingCard(day: Boolean) {
         names.forEachIndexed { i, n -> if (eight || i < 4) JctActionPicker(n, JctStore.MULTI_ACTION + i, day) { sync() } }
         SwitchRow(tr("الأدوات فوق عناصر النظام", "Widgets over system elements"), over, day) { over = it; JctStore.putBool(context, JctStore.OVER_SYSTEM, it); sync() }
     }
+    if (chooseStyle) GridPickerDialog("شكل الزر العائم",
+        JctFloatingStyle.labels.mapIndexed { i, label -> PickerOption(label) {
+            floatingStyle = i; JctStore.putInt(context, JctFloatingStyle.KEY, i); chooseStyle = false; sync()
+        } }, onDismiss = { chooseStyle = false })
 }
 
 @Composable
@@ -381,6 +401,7 @@ private fun ZonesCard(day: Boolean) {
     val en = JctLang.english(context)
     var width by remember { mutableIntStateOf(JctGestureZones.widthPercent(context)) }
     var sensitivity by remember { mutableIntStateOf(JctGestureZones.sensitivityPercent(context)) }
+    var styleFor by remember { mutableStateOf<JctZone?>(null) }
     Card(tr("إعداد السحب من حافة الشاشة", "Configure edge swipe"), day) {
         if (!a11y) {
             Note(tr("يحتاج تفعيل خدمة إمكانية الوصول «T1 remote touch».", "Needs the \"T1 remote touch\" accessibility service."), day)
@@ -399,9 +420,14 @@ private fun ZonesCard(day: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = on, onCheckedChange = { on = it; JctGestureZones.setEnabled(context, z, it) })
                 Box(Modifier.weight(1f)) { JctActionPicker(z.label(en), JctStore.ZONE_ACTION + z.name, day) }
+                OutlinedButton(onClick = { styleFor = z }) { Text(JctGestureZones.styleLabels[JctGestureZones.style(context, z)]) }
             }
         }
     }
+    styleFor?.let { z -> GridPickerDialog("شكل السحب: ${z.label(en)}",
+        JctGestureZones.styleLabels.mapIndexed { i, label -> PickerOption(label) {
+            JctGestureZones.setStyle(context, z, i); styleFor = null
+        } }, onDismiss = { styleFor = null }) }
 }
 
 @Composable
