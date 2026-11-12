@@ -11,10 +11,21 @@ is no longer shown. Tire pressure and temperature sit symmetrically beside the c
 drive mode, steering, pitch, roll, heading, and altitude below. This overview opens first under
 **بيانات السيارة**; the full readings and searchable property catalogue remain in adjacent tabs.
 The home screen places live Waze and YouTube freeform tasks over two fixed cards directly below
-the Jetour image when freeform support
+the Jetour hero image when freeform support
 is enabled. Tapping a card header expands that task to fullscreen; bringing T1 to the front restores
 the task to its card where the device permits task reuse. The reference-inspired home scene and live
-driving readings remain below. Long-press an app to pin it ahead of the default shortcuts;
+driving readings remain above the app cards. A full-width vehicle data scene below Waze and YouTube
+uses the same compass dial and tire readouts as the Vehicle page: the top-down T1 has four pressure
+and temperature readings beside its wheels, while a transparent T1 with its tailgate midway open stays in the middle.
+The home hero shows a Saudi analog clock with the crossed swords and palm inside its dial; Riyadh
+time drives its hands, and equal-size numeric Gregorian and Arabic-digit Umm al-Qura Hijri dates sit
+at the bottom of the dial. The Riyadh-time greeting and OEM outside-temperature reading remain. A compass,
+four tire pressures and temperatures, and the new half-open-tailgate T1 image sit below the app cards.
+The navigation quick tile is replaced by a saved note. Tailgate open/close buttons are visible but
+disabled: the supplied OEM files identify read-only tailgate feedback, not a verified command route.
+Settings has a full-viewport art board with live text, a complete hue/saturation/brightness picker for
+drawing, and a draggable gold emblem sticker; layers and positions persist locally. The control page's
+left-side shortcut list has been removed. Long-press an app to pin it ahead of the default shortcuts;
 the Apps page also shows recently launched apps. Apps can open on the main screen or cluster, and
 app launch, floating buttons, edge zones and app hiding follow JCarTools/NaviStart 1.4.1 (see below).
 All 99 structured readings and the searchable OEM SDK catalogue
@@ -29,7 +40,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-oem-match-v1.10.2.apk
+adb install -r ..\..\t1launcher-saudi-v1.10.6.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -41,7 +52,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 15, versionName 1.10.2. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 20, versionName 1.10.6. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 ## Home app windows
 

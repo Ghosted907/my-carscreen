@@ -174,7 +174,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 HomePage(
                                     day, snap, AppIndex.favorites(availableApps, pinnedApps), toCluster,
-                                    { setDest(it) }, { openNav() }, { quick(it) }, { launch(it) },
+                                    { setDest(it) }, { quick(it) }, { launch(it) },
                                     freeform,
                                     AppIndex.find(availableApps, "com.waze"),
                                     AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
                                 "كاميرا ٣٦٠"
                             ) { app.car.openAvm() }
                             Page.Vehicle -> VehiclePage(day, snap, app.car)
-                            Page.Controls -> ControlsPage(day, snap, { quick("windows") }, { navigate(it) })
+                            Page.Controls -> ControlsPage(day, snap) { quick("windows") }
                             Page.Customize -> SimplePage(
                                 "التخصيص",
                                 "القالب الكلاسيكي هو الافتراضي. الإضافات S1–S10 مطفأة حتى تفعّلها، ولا تغطي مؤشرات الأمان.\nثيم مقروء: ${snap.theme ?: "--"}  الخط: ${snap.font ?: "--"}",

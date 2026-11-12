@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -55,6 +57,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.roundToInt
 
 private val Sand = T1Colors.gold
@@ -161,12 +164,25 @@ private fun DashboardHeader(day: Boolean, page: Page, snap: CarBridge.Snap,
                             onMic: () -> Unit, onOemAssistant: () -> Unit, onDay: () -> Unit) {
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
-    Row(Modifier.fillMaxWidth().height(52.dp).background(if (day) T1Colors.dayCard else Color(0xFF111D19))
+    Row(Modifier.fillMaxWidth().height(52.dp)
+        .background(if (day) T1Colors.dayCard else Color(0xFF111D19))
         .padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
-            contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 36.dp, height = 40.dp))
-        Text("JETOUR  T1", color = accent(day), fontSize = 19.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
+        if (page == Page.Home) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("JETOUR  T1", color = accent(day), fontSize = 14.sp,
+                    fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
+                Text(snap.reading("outside_oem").current?.let { "${it.roundToInt()} °C" } ?: "— °C",
+                    color = accent(day), fontSize = 11.sp, fontFamily = FontFamily.SansSerif)
+                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
+                    contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 24.dp, height = 20.dp))
+            }
+        } else {
+            Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
+                contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 36.dp, height = 40.dp))
+            Text("JETOUR  T1", color = accent(day), fontSize = 19.sp,
+                fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
+        }
         Box(Modifier.width(1.dp).height(30.dp).background(if (day) T1Colors.dayLine else T1Colors.nightLine))
         Text(page.ar, color = ink(day), fontSize = 19.sp, modifier = Modifier.weight(1f))
         Text(if (snap.liveCount > 0) "● ${snap.liveCount} قراءة حية" else "○ بانتظار اتصال السيارة",
@@ -174,7 +190,7 @@ private fun DashboardHeader(day: Boolean, page: Page, snap: CarBridge.Snap,
         HeaderAction("مساعد", day, onOemAssistant)
         HeaderAction("صوت", day, onMic)
         HeaderAction(if (day) "ليلي" else "نهاري", day, onDay)
-        Text(SimpleDateFormat("HH:mm", Locale.US).format(now), color = ink(day), fontSize = 24.sp,
+        if (page != Page.Home) Text(riyadhTime(now), color = ink(day), fontSize = 24.sp,
             fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium)
     }
 }
@@ -209,7 +225,7 @@ private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
 @Composable
 fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCluster: Boolean,
              onDestination: (Boolean) -> Unit,
-             onOpenNav: () -> Unit, onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
+             onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
              dockEnabled: Boolean, waze: LaunchableApp?, youtube: LaunchableApp?,
              onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit,
              onScrolling: (Boolean) -> Unit = {}) {
@@ -220,6 +236,7 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { viewport = it.boundsInRoot() }) {
         val compact = maxHeight <= 600.dp
         val dockHeight = (maxHeight * .48f).coerceIn(278.dp, 350.dp)
+        val telemetryHeight = if (compact) 280.dp else 350.dp
         val heroHeight = (maxHeight - dockHeight - 9.dp).coerceIn(255.dp, 560.dp)
         // The whole home layout scrolls as one: dragging up lifts the hero, the Waze/YouTube dock and the
         // favourites together (previously only the lower section had its own scroll and moved alone).
@@ -235,12 +252,20 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                     listOf(Color.Transparent, Color(0x18071913), Color(0xA6081410)))))
                 Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
                     contentDescription = "سيارة جيتور T1", modifier = Modifier.align(Alignment.BottomStart)
-                        .fillMaxWidth(.66f).fillMaxHeight(.96f), contentScale = ContentScale.Fit)
+                        .fillMaxWidth(.66f).fillMaxHeight(.96f)
+                        .graphicsLayer(scaleX = if (compact) 1.32f else 1.07f,
+                            scaleY = if (compact) 1.32f else 1.07f,
+                            transformOrigin = TransformOrigin(.5f, .5f)),
+                    contentScale = ContentScale.Fit)
+                HomeDateTime(compact, Modifier.align(Alignment.Center)
+                    .offset(x = if (compact) 230.dp else 300.dp))
                 Column(Modifier.align(Alignment.CenterEnd).width(335.dp).padding(start = 26.dp, end = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("JETOUR  T1", color = T1Colors.goldSoft, fontSize = 16.sp,
                         fontFamily = FontFamily.SansSerif, letterSpacing = 2.sp)
-                    Text("جاهزة لكل طريق", color = Color.White, fontSize = 33.sp, fontWeight = FontWeight.SemiBold)
+                    val riyadhHour = rememberRiyadhHour()
+                    Text(if (riyadhHour < 12) "أصبحنا وأصبح الملك لله" else "مساء الخير",
+                        color = Color.White, fontSize = if (compact) 25.sp else 33.sp, fontWeight = FontWeight.SemiBold)
                     Text(if (snap.liveCount > 0) "بيانات السيارة المباشرة" else "بانتظار بيانات السيارة",
                         color = Color(0xFFDDD6C4), fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -266,10 +291,12 @@ fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCl
                 HomeAppTile("YouTube", "الوسائط المرئية", youtube, day, dockEnabled,
                     Modifier.weight(1f), viewport, onDockBounds, onExpand)
             }
+            HomeVehicleTelemetry(day, snap, telemetryHeight)
+            if (compact) HomeNoteTile(day, Modifier.fillMaxWidth())
             if (!compact) Column(Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeQuickTile("MAP", "الملاحة", day, Modifier.weight(1f), onOpenNav)
+                HomeNoteTile(day, Modifier.weight(1f))
                 HomeQuickTile("360°", "الكاميرا", day, Modifier.weight(1f)) { onQuick("avm") }
                 HomeQuickTile("CLUSTER", "العدادات", day, Modifier.weight(1f)) { onQuick("cluster") }
                 HomeQuickTile("OEM", "التحكم", day, Modifier.weight(1f)) { onQuick("controls") }
@@ -369,7 +396,7 @@ private fun HomeQuickTile(icon: String, label: String, day: Boolean, modifier: M
 }
 
 @Composable
-fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit, onPage: (Page) -> Unit) {
+fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val stageHeight = (maxHeight * .62f).coerceIn(340.dp, 540.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -380,29 +407,6 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit, onPa
                 else listOf(Color(0xFF263731), Color(0xFF35423C), Color(0xFF101A16))))) {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.width(210.dp).fillMaxHeight().padding(vertical = 12.dp)
-                    .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    listOf(
-                        Triple("المركبة", Page.Controls, true),
-                        Triple("بيانات السيارة", Page.Vehicle, false),
-                        Triple("العدادات", Page.Cluster, false),
-                        Triple("الكاميرا", Page.Camera, false),
-                        Triple("الإعدادات", Page.Settings, false)
-                    ).forEach { (label, target, selected) ->
-                        Row(Modifier.fillMaxWidth().height(54.dp)
-                            .background(if (selected) accent(day).copy(alpha = .13f) else Color.Transparent)
-                            .clickable { onPage(target) }.padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(Modifier.width(3.dp).height(30.dp)
-                                .background(if (selected) accent(day) else Color.Transparent))
-                            Text(label, color = if (selected) ink(day) else muted(day),
-                                fontSize = if (selected) 21.sp else 18.sp, maxLines = 1,
-                                textAlign = TextAlign.Right, modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
                         contentDescription = "جيتور T1", modifier = Modifier.fillMaxSize().padding(6.dp),

@@ -230,7 +230,11 @@ fun SettingsPage(
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
     val line = if (day) T1Colors.dayLine else T1Colors.nightLine
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val boardHeight = maxHeight
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        SettingsArtBoard(day, Modifier.fillMaxWidth().height(boardHeight))
+        Spacer(Modifier.height(16.dp))
         Text("الإعدادات", color = text, fontSize = 28.sp)
         SettingsChip("تشغيل التطبيقات · الأزرار العائمة · مناطق الحافة · إخفاء التطبيقات", true, onButtons)
         RemoteSettingsCard(day)
@@ -267,6 +271,7 @@ fun SettingsPage(
                 .clickable(onClick = onDay)
                 .padding(16.dp)
         )
+    }
     }
 }
 

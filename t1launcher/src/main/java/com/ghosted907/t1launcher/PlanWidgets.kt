@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -242,30 +243,35 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
 }
 
 @Composable
-private fun TireReadout(label: String, suffix: String, snap: CarBridge.Snap, day: Boolean,
-                        modifier: Modifier, nearCarOnLeft: Boolean) {
+internal fun TireReadout(label: String, suffix: String, snap: CarBridge.Snap, day: Boolean,
+                        modifier: Modifier, nearCarOnLeft: Boolean, condensed: Boolean = false) {
     val pressure = OffRoadPresentation.psi(snap.reading("pressure_$suffix").current)
     val temperature = snap.reading("temp_$suffix").current
     val gold = detailGold(day)
     val align = if (nearCarOnLeft) TextAlign.Left else TextAlign.Right
-    Column(modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.SpaceEvenly) {
+    Column(modifier.fillMaxWidth().padding(horizontal = if (condensed) 3.dp else 8.dp),
+        verticalArrangement = Arrangement.SpaceEvenly) {
         Text(label, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted,
-            fontSize = 12.sp, textAlign = align, modifier = Modifier.fillMaxWidth())
-        Text("${fmt(pressure, 1)} psi", color = tone(day), fontSize = 24.sp,
+            fontSize = if (condensed) 10.sp else 12.sp, textAlign = align, modifier = Modifier.fillMaxWidth())
+        Text("${fmt(pressure, 1)} psi", color = tone(day), fontSize = if (condensed) 16.sp else 24.sp,
             fontWeight = FontWeight.Medium, maxLines = 1, textAlign = align,
             style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
-        Box(Modifier.fillMaxWidth().height(1.dp).background(gold.copy(alpha = .45f)))
-        Text("${fmt(temperature)} °C", color = gold, fontSize = 15.sp, textAlign = align,
+        Box(Modifier.fillMaxWidth(), contentAlignment = if (nearCarOnLeft) Alignment.CenterStart else Alignment.CenterEnd) {
+            Box((if (condensed) Modifier.width(112.dp) else Modifier.fillMaxWidth()).height(1.dp)
+                .background(gold.copy(alpha = .45f)))
+        }
+        Text("${fmt(temperature)} °C", color = gold, fontSize = if (condensed) 11.sp else 15.sp, textAlign = align,
             style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-private fun CompassDial(day: Boolean, heading: Double?, compact: Boolean, modifier: Modifier = Modifier) {
+internal fun CompassDial(day: Boolean, heading: Double?, compact: Boolean, modifier: Modifier = Modifier,
+                         dialSize: Dp = if (compact) 215.dp else 265.dp, condensed: Boolean = false) {
     val gold = detailGold(day)
     val foreground = tone(day)
     Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(if (compact) 215.dp else 265.dp)) {
+        Canvas(Modifier.size(dialSize)) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension * .43f
             drawCircle(foreground.copy(alpha = .12f), radius, center, style = Stroke(15.dp.toPx()))
@@ -282,10 +288,12 @@ private fun CompassDial(day: Boolean, heading: Double?, compact: Boolean, modifi
             drawCircle(gold, 4.dp.toPx(), Offset(center.x, center.y - radius * .97f))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("N     E     S     W", color = gold, fontSize = 12.sp)
-            Text(OffRoadPresentation.compassLabel(heading), color = foreground, fontSize = 22.sp)
-            Text("${fmt(heading)}°", color = foreground, fontSize = 44.sp, fontWeight = FontWeight.Light)
-            Text("اتجاه المركبة", color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 12.sp)
+            Text("N     E     S     W", color = gold, fontSize = if (condensed) 9.sp else 12.sp)
+            Text(OffRoadPresentation.compassLabel(heading), color = foreground,
+                fontSize = if (condensed) 15.sp else 22.sp)
+            Text("${fmt(heading)}°", color = foreground,
+                fontSize = if (condensed) 23.sp else 44.sp, fontWeight = FontWeight.Light)
+            if (!condensed) Text("اتجاه المركبة", color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 12.sp)
         }
     }
 }
