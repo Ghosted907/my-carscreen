@@ -46,6 +46,9 @@ class T1App : android.app.Application() {
 }
 
 class MainActivity : ComponentActivity() {
+    // NaviStart e0.b0 app language: the activity Configuration carries the chosen Locale.
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(JctLang.wrap(newBase))
+
     companion object { const val EXTRA_PAGE = "jct_page" }
 
     private var page by mutableStateOf(Page.Home)

@@ -48,6 +48,11 @@ object JctStore {
     // Launcher-specific: NaviStart takes these from its car profile (getGuDisplayID / getPriDisplayID).
     const val GU_INDEX = "gu_display_index"
     const val PRI_INDEX = "pri_display_index"
+    // 1.11.0: where "pkg" was last sent (2 = cluster, 3 = head unit), for CarRunApp_TOGGLE_GU_PP.
+    // Same values as NaviStart's "areaBoot"; kept under its own key so the boot choice is untouched.
+    const val PKG_AREA = "pkg_area"
+    const val AREA_PRI = 2
+    const val AREA_GU = 3
 }
 
 /**
@@ -111,6 +116,7 @@ object JctLaunch {
     /** MainActivity "تشغيل على لوحة العدادات" / "تشغيل على الجهاز اللوحي": save "pkg", then the boot service with extra d. */
     fun runPkgOn(context: Context, pkg: String, cluster: Boolean) {
         JctStore.putStr(context, JctStore.PKG, pkg)
+        JctStore.putInt(context, JctStore.PKG_AREA, if (cluster) JctStore.AREA_PRI else JctStore.AREA_GU)
         JctBootService.start(context, if (cluster) priIndex(context) else guIndex(context))
     }
 
@@ -119,10 +125,7 @@ object JctLaunch {
         when (action.type) {
             JctType.ENUM -> runEnum(context, action.enumValue ?: return)
             JctType.APP -> startOnDisplayIndex(context, action.pkg ?: return, guIndex(context))
-            JctType.SPLIT -> Handler(Looper.getMainLooper()).post {
-                // NaviStart sends SPLIT to a native proxy (Saa/ssa) that is not in the recovered DEX.
-                Toast.makeText(context, "تقسيم الشاشة غير منقول: تنفيذ JCarTools له في وحدة أصلية مغلقة", Toast.LENGTH_LONG).show()
-            }
+            JctType.SPLIT -> runSplit(context, action)
             JctType.CUSTOM_CMD -> if (action.profile == PROFILE_TASKS) runTaskGroup(context, PROFILE_TASKS)
         }
     }
@@ -143,7 +146,64 @@ object JctLaunch {
             JctEnum.MEDIA_PAUSE -> T1NotificationListener.instance?.controller()?.transportControls?.pause()
             JctEnum.MEDIA_NEXT -> T1NotificationListener.instance?.controller()?.transportControls?.skipToNext()
             JctEnum.MEDIA_BLACK -> T1NotificationListener.instance?.controller()?.transportControls?.skipToPrevious()
+            // e0.z.e case 1 / 6 / 9: the stored "pkg" on the cluster, on the head unit, or on the other one.
+            JctEnum.GO_TO_PP -> runPkgOn(context, storedPkg(context), cluster = true)
+            JctEnum.GO_TO_GU -> runPkgOn(context, storedPkg(context), cluster = false)
+            JctEnum.TOGGLE_GU_PP -> runPkgOn(context, storedPkg(context),
+                cluster = JctStore.int(context, JctStore.PKG_AREA, JctStore.AREA_GU) != JctStore.AREA_PRI)
+            // e0.z.e case 2: BlackActivity with setLaunchDisplayId on the head-unit display.
+            JctEnum.RUN_BLACK -> startOwnOnDisplayIndex(context, Intent(context, JctBlackActivity::class.java), guIndex(context))
+            // Code 74 opens NaviStart's own recents fragment; here the system recents, else T1's apps page (recent list).
+            JctEnum.RECENT_TASK_MANAGER -> {
+                val done = T1TouchService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS) == true
+                if (!done) runEnum(context, JctEnum.RUN_START_APP_MENU)
+            }
+            JctEnum.MEDIA_PLAY_PAUSE -> T1NotificationListener.instance?.controller()?.let { c ->
+                if (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) c.transportControls.pause()
+                else c.transportControls.play()
+            }
         }
+    }
+
+    private fun storedPkg(context: Context) = JctStore.str(context, JctStore.PKG, JctStore.PKG_DEFAULT)
+
+    /** T1's own activity on a display index, same ActivityOptions as NaviStart (r5.k.D). */
+    fun startOwnOnDisplayIndex(context: Context, intent: Intent, d: Int): Boolean = try {
+        val displays = displays(context)
+        if (d < 0 || d >= displays.size) false else {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(displays[d].displayId).toBundle())
+            true
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "start own d=$d failed ${e.javaClass.simpleName}: ${e.message}"); false
+    }
+
+    /**
+     * Split pair. NaviStart hands SPLIT to a closed native proxy; its readable test path (o1.c) uses
+     * ActivityOptions windowing mode + launch bounds. T1 does the same through the existing freeform
+     * launcher (HomeAppWindows.dock) on display 0, so it only works when freeform support is on.
+     */
+    fun runSplit(context: Context, action: JctAction) {
+        val main = Handler(Looper.getMainLooper())
+        val a = action.pkg ?: return
+        val b = action.pkg2 ?: return
+        if (!HomeAppWindows.freeformEnabled(context)) {
+            main.post { Toast.makeText(context, tr(context,
+                "تقسيم الشاشة يحتاج تفعيل النوافذ الحرة (freeform) في النظام",
+                "Split screen needs freeform window support enabled on the system"), Toast.LENGTH_LONG).show() }
+            return
+        }
+        val display = context.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY) ?: return
+        val m = DisplayMetrics(); display.getRealMetrics(m)
+        val (ra, rb) = JctSplit.bounds(m.widthPixels, m.heightPixels, action.orientation, action.ratio)
+        val ok = listOf(a to ra, b to rb).all { (pkg, r) ->
+            runCatching {
+                val component = context.packageManager.getLaunchIntentForPackage(pkg)?.component ?: return@runCatching false
+                HomeAppWindows.dock(context, component, android.graphics.Rect(r.x, r.y, r.x + r.w, r.y + r.h)); true
+            }.getOrElse { Log.w(TAG, "split $pkg failed ${it.message}"); false }
+        }
+        if (!ok) main.post { Toast.makeText(context, tr(context, "تعذّر فتح أحد تطبيقي التقسيم", "Could not open one of the split apps"), Toast.LENGTH_LONG).show() }
     }
 
     // ---- task group (run_app_more_settings_fragment / j0.c.a) ----

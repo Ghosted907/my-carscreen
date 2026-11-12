@@ -46,4 +46,18 @@ class JctActionTest {
         assertTrue(JctZone.fires(91f, 0f))
         assertTrue(JctZone.fires(5000f, 0f))   // capped at 500 still fires
     }
+
+    @Test fun naviStartDisplayActionsRoundTrip() {
+        listOf("enum:GO_TO_PP", "enum:GO_TO_GU", "enum:TOGGLE_GU_PP", "enum:RUN_BLACK", "enum:RECENT_TASK_MANAGER", "enum:MEDIA_PLAY_PAUSE")
+            .forEach { assertEquals(it, JctActions.encode(JctActions.parse(it))); assertTrue(JctActions.valid(JctActions.parse(it))) }
+        assertEquals(9, JctEnum.TOGGLE_GU_PP.code)
+        assertEquals("Black screen", JctEnum.RUN_BLACK.label(true))
+    }
+
+    @Test fun splitBounds() {
+        val (a, b) = JctSplit.bounds(1920, 1080, 1, 30)
+        assertEquals(JctZone.Rect(0, 0, 576, 1080), a); assertEquals(JctZone.Rect(576, 0, 1344, 1080), b)
+        val (c, d) = JctSplit.bounds(1920, 1080, 2, 50)
+        assertEquals(JctZone.Rect(0, 0, 1920, 540), c); assertEquals(JctZone.Rect(0, 540, 1920, 540), d)
+    }
 }

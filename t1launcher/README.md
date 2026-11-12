@@ -29,7 +29,7 @@ Home screen for the Jetour T1 main display. It does not replace the OEM launcher
 ## Install
 
 ```bash
-adb install -r ..\..\t1launcher-saudi-oem-match-v1.10.2.apk
+adb install -r ..\..\t1launcher-saudi-oem-match-v1.11.0.apk
 adb shell am start -n com.ghosted907.t1launcher/.MainActivity
 ```
 
@@ -41,7 +41,7 @@ adb shell cmd package set-home-activity com.ghosted907.t1launcher/.HomeAlias
 
 To put the OEM launcher back, choose it in the system Home picker. T1 never sets itself as the default during install.
 
-Package `com.ghosted907.t1launcher`, versionCode 15, versionName 1.10.2. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
+Package `com.ghosted907.t1launcher`, versionCode 19, versionName 1.11.0. This local build is a debug APK, not a published release. The Home alias stays disabled until you enable it yourself. Installing T1 does not replace the OEM home.
 
 ## Home app windows
 
@@ -80,6 +80,26 @@ NaviStart's methods, ported 1:1:
   `setComponentEnabledSetting`. Full hiding uses `DevicePolicyManager.setApplicationHidden`, which only
   works when T1 is device owner. Restore: 14 taps on the transparent recovery square, or
   `adb shell am broadcast -a com.ghosted907.t1launcher.action.USER_APPS_HIDE_OPEN -n com.ghosted907.t1launcher/.UserAppsHideCommandReceiver`.
+
+### 1.11.0 additions from the NaviStart report (`research/navistart/features.md`)
+
+* **Display routing actions** (NaviStart `n0.d` / `e0.z.e`): `enum:GO_TO_PP` (code 1, stored `pkg` on the
+  cluster), `enum:GO_TO_GU` (6, on the head unit) and `enum:TOGGLE_GU_PP` (9, on the other display than
+  last time, remembered in `pkg_area`: 2 = cluster, 3 = head unit). Same `setLaunchDisplayId` path as above.
+  The cluster card also has a "تبديل بين الشاشتين" button and shows the last destination.
+* **Black screen** (`enum:RUN_BLACK`, code 2): `JctBlackActivity` on the head-unit display index, optional dim
+  clock (`black_clock`) and window brightness (`black_brightness`). Tap to close. Widgets/HTML screens not ported.
+* **Recents** (`enum:RECENT_TASK_MANAGER`, 74): system recents through the accessibility service, else the
+  T1 apps page. **Play/pause** (`enum:MEDIA_PLAY_PAUSE`, 75).
+* **Split screen** (`split:<a>,<b>,<orient>,<ratio>`): now runnable. Pick two apps, side by side or stacked,
+  30:70 / 50:50 / 70:30; both open as freeform windows on display 0 (`JctSplit.bounds` + `HomeAppWindows.dock`).
+  Needs freeform support; otherwise a message explains it. NaviStart's own split goes through a closed native module.
+* **App language** (NaviStart `e0.b0`, key `app_language`: `ar` default, `en`, `system`): MainActivity wraps
+  its base context with that Locale. The JCarTools settings page, action names and their messages are in
+  Arabic and English and follow the language (LTR in English). The rest of the launcher is still Arabic RTL.
+
+Not ported: vehicle/climate/ADAS/driver-profile commands (`CarCmdProxy`, model-specific, nothing for T1),
+VPN, licence, store, GPS substitution, radar database, voice models, HUD and custom instrument themes.
 
 Device owner is never set by the app. It is a one-time manual step, only possible when the device has
 no accounts, and it is hard to undo (the app must clear it itself or the device must be reset).
