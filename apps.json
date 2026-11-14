@@ -1,5 +1,5 @@
 {
-  "tag": "v1.15.5",
+  "tag": "v1.15.6",
   "apps": [
     {
       "id": "t1remote",
@@ -18,11 +18,11 @@
       "id": "t1launcher",
       "name": "T1",
       "package": "com.ghosted907.t1launcher",
-      "versionCode": 41,
-      "versionName": "1.15.5",
+      "versionCode": 42,
+      "versionName": "1.15.6",
       "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1launcher-release.apk",
-      "sha256": "794a04b9b3bfab50ddbfdcc50283b6398ba77fa83ce95d709271e22a51f78a40",
-      "size": 39099045,
+      "sha256": "99ba84e04a1c06ac7900e177383e85d5e88d6406d235bf4ada7ebc87caff525b",
+      "size": 39099049,
       "display": 0,
       "external": false,
       "postInstall": [
