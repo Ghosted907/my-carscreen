@@ -185,9 +185,14 @@ fun ClusterPage(
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
     BoxWithConstraints(Modifier.fillMaxSize()) {
-    val boardHeight = maxHeight
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val display = JctLaunch.displays(context).getOrNull(JctLaunch.priIndex(context))
+        ?.takeUnless { it.displayId == android.view.Display.DEFAULT_DISPLAY }
+    val displaySize = android.graphics.Point().also { display?.getRealSize(it) }
+    val ratio = if (displaySize.x > 0 && displaySize.y > 0) displaySize.x.toFloat() / displaySize.y else 1920f / 720f
+    val boardWidth = minOf(maxWidth, maxHeight * ratio)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsArtBoard(day, Modifier.fillMaxWidth().height(boardHeight))
+        SettingsArtBoard(day, Modifier.align(Alignment.CenterHorizontally).width(boardWidth).height(boardWidth / ratio))
         Spacer(Modifier.height(16.dp))
         Text("العدادات", color = text, fontSize = 26.sp)
         Text("تشغيل التطبيق على لوحة العدادات بطريقة JCarTools: setLaunchDisplayId على فهرس الشاشة، بدون نافذة حرة.", color = muted, fontSize = 13.sp)
@@ -237,6 +242,7 @@ fun SettingsPage(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("الإعدادات", color = text, fontSize = 28.sp)
         SettingsChip(if (day) "الوضع الليلي" else "وضع النهار", true, onDay)
+        LauncherWallpaperSettings()
         SettingsChip("إدارة أذونات اللانشر", false, onPermissions)
         RemoteSettingsCard(day)
         JctSettingsContent(day)

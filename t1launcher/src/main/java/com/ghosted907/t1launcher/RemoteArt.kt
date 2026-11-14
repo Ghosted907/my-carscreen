@@ -29,7 +29,7 @@ class RemoteArt(private val context: Context) {
         return showBitmap(bitmap, body.getDouble("x"), body.getDouble("y"))
     }
 
-    fun showBitmap(bitmap: android.graphics.Bitmap, left: Double = .5, top: Double = .75): RemoteActions.Out {
+    fun showBitmap(bitmap: android.graphics.Bitmap, left: Double? = null, top: Double? = null): RemoteActions.Out {
         if (!Settings.canDrawOverlays(context))
             return RemoteActions.Out(false, "فعّل صلاحية الظهور فوق التطبيقات للانشر")
         val display = JctLaunch.displays(context).getOrNull(JctLaunch.priIndex(context))
@@ -39,15 +39,16 @@ class RemoteArt(private val context: Context) {
         val wm = dc.getSystemService(WindowManager::class.java)
         val size = android.graphics.Point()
         display.getRealSize(size)
-        val width = (size.x * .34f).toInt()
-        val height = (width / 2).coerceAtMost(size.y / 3)
+        val matchPreview = left == null && top == null
+        val width = if (matchPreview) size.x else (size.x * .34f).toInt()
+        val height = if (matchPreview) size.y else (width / 2).coerceAtMost(size.y / 3)
         val params = WindowManager.LayoutParams(width, height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            x = ((size.x - width) * left).toInt()
-            y = ((size.y - height) * top).toInt()
+            x = ((size.x - width) * (left ?: 0.0)).toInt()
+            y = ((size.y - height) * (top ?: 0.0)).toInt()
         }
         val next = ImageView(dc).apply {
             setImageBitmap(bitmap)

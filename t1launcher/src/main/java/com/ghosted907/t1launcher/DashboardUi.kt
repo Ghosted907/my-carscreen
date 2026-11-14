@@ -77,7 +77,17 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
         surface = T1Colors.dayCard, onSurface = T1Colors.dayText) else darkColorScheme(primary = Sand,
         background = T1Colors.nightBg, surface = T1Colors.nightCard, onSurface = T1Colors.nightText)
     MaterialTheme(colorScheme = colors, typography = Typography(bodyLarge = TextStyle(fontFamily = font))) {
-        Column(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Box(Modifier.fillMaxSize().background(colors.background)) {
+            val wallpaper = rememberLauncherWallpaper()
+            if (wallpaper != null) Image(wallpaper, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+            else Image(androidx.compose.ui.res.painterResource(
+                if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
+                null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+            val shade = if (day) T1Colors.dayBg else Color.Black
+            val opacity = if (page == Page.Home) 0f else .58f
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+                listOf(shade.copy(alpha = opacity), shade.copy(alpha = if (page == Page.Home) .62f else .78f)))))
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             Box {
                 DashboardHeader(day, page, snap, onMic, onOemAssistant, onDay)
                 SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
@@ -92,13 +102,14 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
                 }
             }
         }
+        }
     }
 }
 
 @Composable
 private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit, onBack: () -> Unit) {
     Column(Modifier.width(88.dp).fillMaxHeight()
-        .background(if (day) Color(0xFFE9E6DA) else Color(0xFF07110F))
+        .background(if (day) Color(0xB3E9E6DA) else Color(0x9907110F))
         .border(width = 1.dp, color = accent(day).copy(alpha = .28f)),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Page.entries.forEach { item ->
@@ -178,7 +189,7 @@ private fun DashboardHeader(day: Boolean, page: Page, snap: CarBridge.Snap,
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
     Row(Modifier.fillMaxWidth().height(52.dp)
-        .background(if (day) T1Colors.dayCard else Color(0xFF111D19))
+        .background(if (day) T1Colors.dayCard.copy(alpha = .76f) else Color(0xA6111D19))
         .padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         if (page == Page.Home) {
@@ -248,16 +259,12 @@ fun HomePage(day: Boolean, apps: List<LaunchableApp>) {
         Triple("التكييف", AppIndex.find(apps, "com.autolink.aircontroller"), null)
     )
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        Image(androidx.compose.ui.res.painterResource(
-            if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
-            null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xA0000000)))))
         val cardWidth = (maxWidth * .22f).coerceIn(130.dp, 280.dp)
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            shortcuts.forEach { (label, app, settings) ->
+            shortcuts.forEachIndexed { index, (label, app, settings) ->
                 Column(Modifier.width(cardWidth).height(120.dp).clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xDB202226)).clickable(enabled = app != null || settings != null) {
+                    .background(Color(0xA6202226)).clickable(enabled = app != null || settings != null) {
                         runCatching {
                             val intent = app?.let { android.content.Intent.makeMainActivity(it.component) }
                                 ?: android.content.Intent(requireNotNull(settings))
@@ -267,8 +274,7 @@ fun HomePage(day: Boolean, apps: List<LaunchableApp>) {
                         }
                     }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center) {
-                    if (app != null) AppArtwork(app)
-                    else Text(if (settings != null) "◉" else "—", color = Color.White, fontSize = 28.sp)
+                    ShortcutArtwork(index)
                     Text(label, color = Color.White, fontSize = 19.sp)
                     if (app == null && settings == null) Text("غير مثبت", color = Color.LightGray, fontSize = 12.sp)
                 }
