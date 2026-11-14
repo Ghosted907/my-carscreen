@@ -1,5 +1,5 @@
 {
-  "tag": "v1.15.7",
+  "tag": "v1.15.8",
   "apps": [
     {
       "id": "t1remote",
@@ -18,11 +18,11 @@
       "id": "t1launcher",
       "name": "T1",
       "package": "com.ghosted907.t1launcher",
-      "versionCode": 43,
-      "versionName": "1.15.7",
+      "versionCode": 44,
+      "versionName": "1.15.8",
       "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1launcher-release.apk",
-      "sha256": "13cdd50acbe05d712c67d9980581f23991891650666cf5a79ead6dbb9539873f",
-      "size": 39099049,
+      "sha256": "4891b207405b9c8c786e5181023c44b333866f602a2b249bdc25bcbea287defc",
+      "size": 39099045,
       "display": 0,
       "external": false,
       "postInstall": [
@@ -31,7 +31,7 @@
         "settings put global enable_freeform_support 1",
         "settings put global force_resizable_activities 1"
       ],
-      "notes": "Custom home shortcut artwork and selectable launcher wallpaper."
+      "notes": "1.15.8: 80% opaque buttons and sidebar, JETOUR chip and day/night toggle on Home, phone control always on."
     },
     {
       "id": "clusterdiag",
