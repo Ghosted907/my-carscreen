@@ -3,7 +3,6 @@ package com.ghosted907.t1launcher
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
-import android.hardware.display.DisplayManager
 import android.provider.Settings
 import android.util.Base64
 import android.view.Gravity
@@ -13,16 +12,12 @@ import org.json.JSONObject
 
 /** A bounded, non-interactive art overlay on the identified cluster display. */
 class RemoteArt(private val context: Context) {
-    private var manager: WindowManager? = null
-    private var view: ImageView? = null
+    private companion object {
+        var manager: WindowManager? = null
+        var view: ImageView? = null
+    }
 
     fun show(body: JSONObject): RemoteActions.Out {
-        if (!Settings.canDrawOverlays(context))
-            return RemoteActions.Out(false, "فعّل صلاحية الظهور فوق التطبيقات للانشر")
-        val id = Displays.clusterId(context)
-            ?: return RemoteActions.Out(false, "شاشة العدادات غير متاحة")
-        val display = context.getSystemService(DisplayManager::class.java).getDisplay(id)
-            ?: return RemoteActions.Out(false, "انقطعت شاشة العدادات")
         val bytes = runCatching { Base64.decode(body.getString("image"), Base64.DEFAULT) }.getOrNull()
             ?: return RemoteActions.Out(false, "الصورة غير صالحة")
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -31,6 +26,15 @@ class RemoteArt(private val context: Context) {
             return RemoteActions.Out(false, "أبعاد الصورة غير صالحة")
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             ?: return RemoteActions.Out(false, "تعذر قراءة الصورة")
+        return showBitmap(bitmap, body.getDouble("x"), body.getDouble("y"))
+    }
+
+    fun showBitmap(bitmap: android.graphics.Bitmap, left: Double = .5, top: Double = .75): RemoteActions.Out {
+        if (!Settings.canDrawOverlays(context))
+            return RemoteActions.Out(false, "فعّل صلاحية الظهور فوق التطبيقات للانشر")
+        val display = JctLaunch.displays(context).getOrNull(JctLaunch.priIndex(context))
+            ?.takeUnless { it.displayId == android.view.Display.DEFAULT_DISPLAY }
+            ?: return RemoteActions.Out(false, "شاشة العدادات غير متاحة")
         val dc = context.createDisplayContext(display)
         val wm = dc.getSystemService(WindowManager::class.java)
         val size = android.graphics.Point()
@@ -42,8 +46,8 @@ class RemoteArt(private val context: Context) {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            x = ((size.x - width) * body.getDouble("x")).toInt()
-            y = ((size.y - height) * body.getDouble("y")).toInt()
+            x = ((size.x - width) * left).toInt()
+            y = ((size.y - height) * top).toInt()
         }
         val next = ImageView(dc).apply {
             setImageBitmap(bitmap)

@@ -24,6 +24,8 @@ import android.view.animation.AnticipateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.TextView
+import android.widget.LinearLayout
 
 /**
  * NaviStart `y0.a.k()` overlay type choice (j2/e.k, v4/d.k): TYPE_ACCESSIBILITY_OVERLAY (2032)
@@ -219,7 +221,7 @@ class JctLounchService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         removeAll()
         if (!Settings.canDrawOverlays(this) && !JctOverlay.useA11y(this)) { stopSelf(); return START_NOT_STICKY }
-        val on = JctStore.bool(this, JctStore.LOUNCHB_TRUE, false)
+        val on = JctStore.bool(this, JctStore.LOUNCHB_TRUE, true)
         val multiOn = JctStore.bool(this, JctStore.MULTI_ON, false)
         if (!on && !multiOn) { stopSelf(); return START_NOT_STICKY }
         if (on) {
@@ -248,7 +250,22 @@ class JctLounchService : Service() {
                 img.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).start()
             }
             single = JctDragWindow(this, "LounchB").also {
-                it.attach(root, JctOverlay.windowManager(this), root) { JctLaunch.runKey(this, JctStore.LOUNCHB_ACTION) }
+                val bar = LinearLayout(this).apply {
+                    addView(root)
+                    addView(TextView(this@JctLounchService).apply {
+                        text = "↶"
+                        contentDescription = "رجوع في اللانشر"
+                        gravity = Gravity.CENTER
+                        textSize = 30f
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(0x55222222)
+                        setOnClickListener { openLauncher("back") }
+                    }, LinearLayout.LayoutParams(JctOverlay.dp(this@JctLounchService, 48), JctOverlay.dp(this@JctLounchService, 48)))
+                }
+                it.attach(bar, JctOverlay.windowManager(this), root) {
+                    if (action.enumValue in setOf(JctEnum.Not_value, JctEnum.GLOBAL_HOME, JctEnum.GLOBAL_BACK)) openLauncher("home")
+                    else JctLaunch.runKey(this, JctStore.LOUNCHB_ACTION)
+                }
             }
         }
         if (multiOn) {
@@ -260,6 +277,10 @@ class JctLounchService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun openLauncher(page: String) {
+        LauncherDisplay.start(this, Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_PAGE, page))
     }
 
     private fun removeAll() { single?.detach(); multi?.detach(); single = null; multi = null }
@@ -276,7 +297,7 @@ class JctLounchService : Service() {
         /** LounchB.c */
         fun sync(context: Context) {
             val i = Intent(context.applicationContext, JctLounchService::class.java)
-            if (JctStore.bool(context, JctStore.LOUNCHB_TRUE, false) || JctStore.bool(context, JctStore.MULTI_ON, false))
+            if (JctStore.bool(context, JctStore.LOUNCHB_TRUE, true) || JctStore.bool(context, JctStore.MULTI_ON, false))
                 runCatching { context.startService(i) } else context.stopService(i)
         }
     }

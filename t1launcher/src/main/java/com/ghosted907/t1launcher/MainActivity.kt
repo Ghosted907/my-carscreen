@@ -126,7 +126,19 @@ class MainActivity : ComponentActivity() {
 
     /** RUN_START_APP_MENU action opens the app list. */
     private fun consumePageExtra(intent: Intent?) {
-        if (intent?.getStringExtra(EXTRA_PAGE) == "apps") { navigate(Page.Apps); intent.removeExtra(EXTRA_PAGE) }
+        if (intent?.getStringExtra(EXTRA_PAGE) == "back") {
+            intent.removeExtra(EXTRA_PAGE)
+            if (page != Page.Home || showWindows) goBack()
+            return
+        }
+        val target = when (intent?.getStringExtra(EXTRA_PAGE)) {
+            "home" -> Page.Home
+            "apps" -> Page.Apps
+            "cluster" -> Page.Cluster
+            else -> return
+        }
+        navigate(target)
+        intent.removeExtra(EXTRA_PAGE)
     }
 
     override fun onStop() {
@@ -184,7 +196,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
-            BackHandler(enabled = page != Page.Home || showWindows) { navigate(Page.Home) }
+            BackHandler(enabled = page != Page.Home || showWindows) { goBack() }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 T1Shell(
                     page = page,
@@ -193,24 +205,15 @@ class MainActivity : ComponentActivity() {
                     onPage = { if (it == Page.Camera) openCamera() else navigate(it) },
                     onMic = { voice() },
                     onOemAssistant = { OemAssistant.request(this@MainActivity) },
-                    onDay = { day = !day; app.prefs.day = day }
+                    onDay = { day = !day; app.prefs.day = day },
+                    onBack = { goBack() }
                 ) {
                     androidx.compose.foundation.layout.Box {
                         when (page) {
                             Page.Home -> if (showWindows) {
                                 WindowsPage(day) { showWindows = false }
                             } else {
-                                HomePage(
-                                    day, snap, AppIndex.favorites(availableApps, pinnedApps), toCluster,
-                                    { setDest(it) }, { quick(it) }, { launch(it) },
-                                    freeform,
-                                    AppIndex.find(availableApps, "com.waze"),
-                                    AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube"),
-                                    { appToDock, bounds -> onHomeDockMeasured(appToDock, bounds) },
-                                    { expandHomeApp(it) },
-                                    { onHomeScrolling(it) },
-                                    oemApps = availableApps
-                                )
+                                HomePage(day, availableApps)
                             }
                             Page.Apps -> AppsPage(
                                 day, toCluster, availableApps,
@@ -224,7 +227,9 @@ class MainActivity : ComponentActivity() {
                             )
                             Page.Camera -> SimplePage("كاميرا ٣٦٠", "جارٍ فتح واجهة الكاميرات", day)
                             Page.Vehicle -> VehiclePage(day, snap, app.car)
-                            Page.Controls -> ControlsPage(day, snap) { quick("windows") }
+                            Page.Controls -> ControlsPage(day, snap, { day = it; app.prefs.day = it }, { classic() }) {
+                                quick("windows")
+                            }
                             Page.Customize -> SimplePage(
                                 "التخصيص",
                                 "القالب الكلاسيكي هو الافتراضي. الإضافات S1–S10 مطفأة حتى تفعّلها، ولا تغطي مؤشرات الأمان.\nثيم مقروء: ${snap.theme ?: "--"}  الخط: ${snap.font ?: "--"}",
@@ -337,10 +342,7 @@ class MainActivity : ComponentActivity() {
         dockHandler.postDelayed({
             dockScheduled = false
             if (homeScrolling || page != Page.Home || !freeform) return@postDelayed
-            val targets = listOfNotNull(
-                AppIndex.find(availableApps, "com.waze"),
-                AppIndex.find(availableApps, "app.revanced.android.youtube", "com.google.android.youtube")
-            )
+            val targets = listOfNotNull(AppIndex.find(availableApps, "com.waze"))
             targets.forEach { app ->
                 val bounds = homeBounds[app.packageName] ?: return@forEach
                 if (dockedBounds[app.packageName] == bounds) return@forEach
@@ -359,6 +361,12 @@ class MainActivity : ComponentActivity() {
                 expandedPackage = null
                 Toast.makeText(this, it.message ?: "تعذر تكبير التطبيق", Toast.LENGTH_LONG).show()
             }
+    }
+
+    private fun goBack() {
+        if (showWindows) showWindows = false
+        else if (page != Page.Home) navigate(Page.Home)
+        else finish()
     }
 
     private fun navigate(target: Page) {

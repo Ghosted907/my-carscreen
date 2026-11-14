@@ -25,8 +25,7 @@ class JctGestureZones(private val service: AccessibilityService) {
 
     fun refresh() {
         remove()
-        val prefs = prefs(service)
-        val enabled = JctZone.values().filter { prefs.getBoolean("enabled_" + it.name, false) }
+        val enabled = JctZone.values().filter { enabled(service, it) }
         if (enabled.isEmpty()) return
         val t = JctZone.thickness(service.resources.displayMetrics.density) * widthPercent(service) / 100
         val m = DisplayMetrics()
@@ -43,7 +42,7 @@ class JctGestureZones(private val service: AccessibilityService) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT).apply {
-            x = maxOf(0, r.x); y = maxOf(0, r.y); gravity = Gravity.TOP or Gravity.START; title = "GestureZone_${zone.name}"
+            x = maxOf(0, r.x); y = maxOf(0, r.y); gravity = Gravity.TOP or Gravity.LEFT; title = "GestureZone_${zone.name}"
         }
         var sx = 0f; var sy = 0f; var dx = 0f; var dy = 0f; var downAt = 0L
         val restX = p.x; val restY = p.y
@@ -73,7 +72,15 @@ class JctGestureZones(private val service: AccessibilityService) {
                     val swiped = JctZone.fires(zone, dx, dy, threshold)
                     val tapped = style(service, zone) != STYLE_HIDDEN && e.eventTime - downAt < 450 &&
                         kotlin.math.hypot(dx, dy) < threshold / 3f
-                    if (swiped || tapped) runCatching { JctLaunch.runKey(service, JctStore.ZONE_ACTION + zone.name) }
+                    if (swiped || tapped) runCatching {
+                        val key = JctStore.ZONE_ACTION + zone.name
+                        if (JctStore.p(service).contains(key)) JctLaunch.runKey(service, key)
+                        else when (zone) {
+                            JctZone.LEFT_TOP -> LauncherDisplay.start(service, android.content.Intent(service, MainActivity::class.java))
+                            JctZone.RIGHT_TOP -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                            else -> Unit
+                        }
+                    }
                     v.feedback(-1f, e.x, e.y)
                 }
                 MotionEvent.ACTION_CANCEL -> v.feedback(-1f, e.x, e.y)
@@ -96,7 +103,7 @@ class JctGestureZones(private val service: AccessibilityService) {
         private var touchX = -1f
         private var touchY = -1f
         private var release: ValueAnimator? = null
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D4A84B") }
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
         init { setBackgroundColor(0) }
         fun feedback(l: Float, x: Float, y: Float) {
             release?.cancel()
@@ -122,7 +129,7 @@ class JctGestureZones(private val service: AccessibilityService) {
             val center = if (vertical) (if (level < 0f) height / 2f else touchY.coerceIn(18f, height - 18f))
                 else (if (level < 0f) width / 2f else touchX.coerceIn(18f, width - 18f))
             val length = (28f + 30f * progress) * resources.displayMetrics.density
-            paint.alpha = if (level < 0f) 165 else (170 + 75 * progress).toInt().coerceIn(0, 255)
+            paint.alpha = if (level < 0f) 105 else (125 + 55 * progress).toInt()
             val bounds = when {
                 zone.name.startsWith("LEFT") -> RectF(2f + drawn - restThick, center - length / 2, drawn - 2f, center + length / 2)
                 vertical -> RectF(width - drawn + 2f, center - length / 2, width - drawn + restThick - 2f, center + length / 2)
@@ -168,7 +175,8 @@ class JctGestureZones(private val service: AccessibilityService) {
         const val STYLE_ARROW = 3
         const val STYLE_TAB = 4
         val styleLabels = listOf("مقبض مائل", "دائري", "مخفي", "سهم", "لسان")
-        fun style(c: Context, z: JctZone) = prefs(c).getInt("style_" + z.name, STYLE_HIDDEN).coerceIn(0, 4)
+        fun style(c: Context, z: JctZone) = prefs(c).getInt("style_" + z.name,
+            if (defaultEnabled(z)) STYLE_ARROW else STYLE_HIDDEN).coerceIn(0, 4)
         fun setStyle(c: Context, z: JctZone, value: Int) {
             prefs(c).edit().putInt("style_" + z.name, value.coerceIn(0, 4)).apply()
             T1TouchService.instance?.zones?.refresh()
@@ -187,6 +195,7 @@ class JctGestureZones(private val service: AccessibilityService) {
             prefs(c).edit().putBoolean("enabled_" + z.name, on).apply()
             T1TouchService.instance?.zones?.refresh()
         }
-        fun enabled(c: Context, z: JctZone) = prefs(c).getBoolean("enabled_" + z.name, false)
+        private fun defaultEnabled(z: JctZone) = z == JctZone.LEFT_TOP || z == JctZone.RIGHT_TOP
+        fun enabled(c: Context, z: JctZone) = prefs(c).getBoolean("enabled_" + z.name, defaultEnabled(z))
     }
 }

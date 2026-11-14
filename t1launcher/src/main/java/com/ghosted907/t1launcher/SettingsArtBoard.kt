@@ -24,6 +24,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlinx.coroutines.launch
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -70,6 +75,9 @@ private val artFonts = listOf(
 @Composable
 fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val artwork = rememberGraphicsLayer()
+    val scope = rememberCoroutineScope()
+    val clusterArt = remember { RemoteArt(context.applicationContext) }
     val prefs = remember { context.getSharedPreferences("settings_art", Context.MODE_PRIVATE) }
     var mode by remember { mutableStateOf(ArtMode.Text) }
     var caption by remember { mutableStateOf(prefs.getString("caption", "").orEmpty()) }
@@ -147,10 +155,15 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
         .background(if (day) T1Colors.dayCard else Color(0xFF101D18))
         .border(1.dp, T1Colors.gold.copy(alpha = .55f), board)) {
         val density = LocalDensity.current
+        val boardWidth = maxWidth
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val stickerSizePx = with(density) { stickerSize.dp.toPx() }
         val customSizePx = with(density) { customSize.dp.toPx() }
+        Box(Modifier.fillMaxSize().drawWithContent {
+            artwork.record { this@drawWithContent.drawContent() }
+            drawLayer(artwork)
+        }) {
         Canvas(Modifier.fillMaxSize()) {
             strokes.forEach { stroke ->
                 if (stroke.points.isNotEmpty()) {
@@ -170,7 +183,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.Medium, fontFamily = artFonts[fontIndex].second),
                 modifier = Modifier.align(Alignment.TopStart)
                     .offset { IntOffset((captionX * widthPx).roundToInt(), (captionY * heightPx).roundToInt()) }
-                    .width((maxWidth * .42f).coerceIn(200.dp, 560.dp))
+                    .width((boardWidth * .42f).coerceIn(200.dp, 560.dp))
                     .then(if (mode == ArtMode.Text) Modifier.pointerInput(widthPx, heightPx) {
                         detectTransformGestures { _, pan, zoom, _ ->
                             captionX = (captionX - pan.x / widthPx).coerceIn(0f, .70f)
@@ -231,11 +244,21 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                     }
                 } else Modifier), contentScale = ContentScale.Fit)
         }
+        }
         Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
             .background(if (day) Color(0xEDEEEDE7) else Color(0xE8081611))
             .padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("مساحة العدادات", color = textColor, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    scope.launch {
+                        val message = runCatching {
+                            clusterArt.showBitmap(artwork.toImageBitmap().asAndroidBitmap()).msg
+                        }.getOrDefault("تعذّر عرض اللوحة")
+                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("تطبيق على العدادات") }
+                TextButton(onClick = { clusterArt.clear() }) { Text("إزالة من العدادات") }
                 ArtMode.entries.forEach { item ->
                     FilterChip(selected = mode == item, onClick = { mode = item }, label = { Text(item.label) })
                 }

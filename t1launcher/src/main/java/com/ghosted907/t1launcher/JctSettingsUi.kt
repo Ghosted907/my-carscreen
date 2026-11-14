@@ -322,7 +322,7 @@ private fun SplitPresetsCard(day: Boolean) {
 @Composable
 private fun FloatingCard(day: Boolean) {
     val context = LocalContext.current
-    var single by remember { mutableStateOf(JctStore.bool(context, JctStore.LOUNCHB_TRUE, false)) }
+    var single by remember { mutableStateOf(JctStore.bool(context, JctStore.LOUNCHB_TRUE, true)) }
     var multi by remember { mutableStateOf(JctStore.bool(context, JctStore.MULTI_ON, false)) }
     var eight by remember { mutableStateOf(JctStore.int(context, JctStore.MULTI_COUNT, 8) == 8) }
     var over by remember { mutableStateOf(JctStore.bool(context, JctStore.OVER_SYSTEM, true)) }

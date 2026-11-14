@@ -14,6 +14,7 @@ internal object HomeAppWindows {
     private const val TAG = "T1HomeWindows"
     private const val FREEFORM = 5
     private const val FULLSCREEN = 1
+    private val requestedWindows = mutableMapOf<String, Pair<Int, Rect?>>()
 
     fun freeformEnabled(context: Context): Boolean = runCatching {
         android.provider.Settings.Global.getInt(context.contentResolver, "enable_freeform_support", 0) == 1
@@ -31,8 +32,15 @@ internal object HomeAppWindows {
     private fun start(context: Context, component: ComponentName, mode: Int, bounds: Rect?) {
         val intent = context.packageManager.getLaunchIntentForPackage(component.packageName)
             ?: Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-            Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val request = mode to bounds?.let(::Rect)
+        // OEM Android 11 preserves the old task's fullscreen geometry on a reused launch.
+        // Recreate its activities only when the requested geometry changes.
+        val recreate = requestedWindows[component.packageName] != request
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (recreate) {
+            Intent.FLAG_ACTIVITY_CLEAR_TASK
+        } else {
+            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
         if (bounds != null) options.setLaunchBounds(bounds)
         runCatching {
@@ -43,6 +51,7 @@ internal object HomeAppWindows {
         bundle.putInt("android.activity.windowingMode", mode)
         bundle.putInt("android.activity.activityWindowingMode", mode)
         context.startActivity(intent, bundle)
+        requestedWindows[component.packageName] = request
         Log.i(TAG, "launch ${component.packageName} mode=$mode bounds=$bounds")
     }
 }

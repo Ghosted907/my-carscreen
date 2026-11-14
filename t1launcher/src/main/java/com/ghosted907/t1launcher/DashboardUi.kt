@@ -70,7 +70,8 @@ private fun surface(day: Boolean) = if (day) T1Colors.dayCard else T1Colors.nigh
 
 @Composable
 fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Unit,
-            onMic: () -> Unit, onOemAssistant: () -> Unit, onDay: () -> Unit, content: @Composable () -> Unit) {
+            onMic: () -> Unit, onOemAssistant: () -> Unit, onDay: () -> Unit,
+            onBack: () -> Unit, content: @Composable () -> Unit) {
     val font = remember { FontFamily(Font(R.font.arabic)) }
     val colors = if (day) lightColorScheme(primary = Color(0xFF8A6828), background = T1Colors.dayBg,
         surface = T1Colors.dayCard, onSurface = T1Colors.dayText) else darkColorScheme(primary = Sand,
@@ -83,7 +84,7 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
-                    DashboardNavigation(page, day, onPage)
+                    DashboardNavigation(page, day, onPage, onBack)
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         Box(Modifier.weight(1f).fillMaxHeight()
                             .padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
@@ -95,7 +96,7 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
 }
 
 @Composable
-private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit) {
+private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit, onBack: () -> Unit) {
     Column(Modifier.width(88.dp).fillMaxHeight()
         .background(if (day) Color(0xFFE9E6DA) else Color(0xFF07110F))
         .border(width = 1.dp, color = accent(day).copy(alpha = .28f)),
@@ -117,6 +118,7 @@ private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit
                     .fillMaxHeight(.55f).background(accent(day)))
             }
         }
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("رجوع") }
     }
 }
 
@@ -236,187 +238,42 @@ private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun HomePage(day: Boolean, snap: CarBridge.Snap, apps: List<LaunchableApp>, toCluster: Boolean,
-             onDestination: (Boolean) -> Unit,
-             onQuick: (String) -> Unit, onApp: (LaunchableApp) -> Unit,
-             dockEnabled: Boolean, waze: LaunchableApp?, youtube: LaunchableApp?,
-             onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit,
-             onScrolling: (Boolean) -> Unit = {},
-             oemApps: List<LaunchableApp> = emptyList()) {
-    val scroll = rememberScrollState()
-    // Visible part of the page (root coordinates); docked windows are clipped to it.
-    var viewport by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    LaunchedEffect(scroll.isScrollInProgress) { onScrolling(scroll.isScrollInProgress) }
-    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { viewport = it.boundsInRoot() }) {
-        val compact = maxHeight <= 600.dp
-        val dockHeight = (maxHeight * .48f).coerceIn(278.dp, 350.dp)
-        val telemetryHeight = if (compact) 280.dp else 350.dp
-        val heroHeight = (maxHeight - dockHeight - 9.dp).coerceIn(255.dp, 560.dp)
-        // The whole home layout scrolls as one: dragging up lifts the hero, the Waze/YouTube dock and the
-        // favourites together (previously only the lower section had its own scroll and moved alone).
-        Column(Modifier.fillMaxSize().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Box(Modifier.fillMaxWidth().height(heroHeight).clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF101B17))) {
-                Image(painter = androidx.compose.ui.res.painterResource(
-                    if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
-                    contentDescription = null, modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop, alignment = BiasAlignment(0f, -.6f))
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                    if (day) listOf(Color(0xCE153322), Color(0x801B422E), Color(0x2610251B))
-                    else listOf(Color(0xE8071711), Color(0xA610251B), Color(0x3610251B)), startX = 0f)))
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                    if (day) listOf(Color.Transparent, Color(0x1016291D), Color(0x53122018))
-                    else listOf(Color.Transparent, Color(0x18071913), Color(0xA6081410)))))
-                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(.66f).fillMaxHeight(.96f)
-                    .graphicsLayer(scaleX = if (compact) 1.32f else 1.07f,
-                        scaleY = if (compact) 1.32f else 1.07f,
-                        transformOrigin = TransformOrigin(.5f, .5f))) {
-                    Image(painter = androidx.compose.ui.res.painterResource(R.drawable.oem_t1_cutout_saudi),
-                        contentDescription = "سيارة جيتور T1", modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit)
-                    HeroVehicleLights(snap)
-                }
-                HomeDateTime(compact, Modifier.align(Alignment.Center)
-                    .offset(x = if (compact) 230.dp else 300.dp))
-                Column(Modifier.align(Alignment.CenterEnd).width(335.dp).padding(start = 26.dp, end = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("JETOUR  T1", color = T1Colors.goldSoft, fontSize = 16.sp,
-                        fontFamily = FontFamily.SansSerif, letterSpacing = 2.sp)
-                    val riyadhHour = rememberRiyadhHour()
-                    Text(if (riyadhHour < 12) "أصبحنا وأصبح الملك لله" else "مساء الخير",
-                        color = Color.White, fontSize = if (compact) 25.sp else 33.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (snap.liveCount > 0) "بيانات السيارة المباشرة" else "بانتظار بيانات السيارة",
-                        color = Color(0xFFDDD6C4), fontSize = 12.sp)
-                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(snap.speed?.toInt()?.toString() ?: "—", color = Color.White, fontSize = 42.sp,
-                            fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Light)
-                        Text(snap.speedUnit, color = T1Colors.goldSoft, fontSize = 13.sp,
-                            modifier = Modifier.padding(bottom = 10.dp))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        HeroReading("الوقود", snap.fuel?.let { "$it%" } ?: "—")
-                        HeroReading("المدى", snap.rangeKm?.let { "$it كم" } ?: "—")
-                        HeroReading("القير", when (snap.gear) { 1 -> "P"; 2 -> "R"; 3 -> "N"; 4 -> "D"; else -> "—" })
-                    }
-                    Text("كل قراءات السيارة ←", color = T1Colors.goldSoft, fontSize = 13.sp,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onQuick("vehicle") }
-                            .padding(vertical = 4.dp))
-                }
-                SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
-            }
-            Row(Modifier.fillMaxWidth().height(dockHeight), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HomeAppTile("خرائط", waze, day, dockEnabled,
-                    Modifier.weight(1.2f), viewport, onDockBounds, onExpand)
-                HomeAppTile("يوتيوب", youtube, day, dockEnabled,
-                    Modifier.weight(1f), viewport, onDockBounds, onExpand)
-            }
-            OemAppShortcuts(day, oemApps)
-            HomeVehicleTelemetry(day, snap, telemetryHeight)
-            HomeLampReadings(day, snap)
-            if (compact) HomeNoteTile(day, Modifier.fillMaxWidth())
-            if (!compact) Column(Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeNoteTile(day, Modifier.weight(1f))
-                HomeQuickTile("360°", "الكاميرا", day, Modifier.weight(1f)) { onQuick("avm") }
-                HomeQuickTile("CLUSTER", "العدادات", day, Modifier.weight(1f)) { onQuick("cluster") }
-                HomeQuickTile("OEM", "التحكم", day, Modifier.weight(1f)) { onQuick("controls") }
-                HomeQuickTile("APPS", "التطبيقات", day, Modifier.weight(1f)) { onQuick("apps") }
-            }
-            Column(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("التطبيقات المفضلة", color = ink(day), fontSize = 16.sp, modifier = Modifier.weight(1f))
-                    Choice("الجهاز اللوحي", !toCluster, day) { onDestination(false) }
-                    Choice("لوحة العدادات", toCluster, day) { onDestination(true) }
-                    ActionButton("عرض الكل", day) { onQuick("apps") }
-                }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
-                    items(apps, key = { it.component.flattenToString() }) { app ->
-                        Column(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).clickable { onApp(app) }.padding(6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally) {
-                            AppArtwork(app)
-                            Text(app.label, color = muted(day), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+fun HomePage(day: Boolean, apps: List<LaunchableApp>) {
+    val context = LocalContext.current
+    val shortcuts = listOf(
+        Triple("يوتيوب", AppIndex.find(apps, "app.revanced.android.youtube", "com.google.android.youtube"), null),
+        Triple("ويز", AppIndex.find(apps, "com.waze"), null),
+        Triple("البلوتوث", AppIndex.find(apps, "com.autolink.bluetooth"), android.provider.Settings.ACTION_BLUETOOTH_SETTINGS),
+        Triple("الواي فاي", null, android.provider.Settings.ACTION_WIFI_SETTINGS),
+        Triple("التكييف", AppIndex.find(apps, "com.autolink.aircontroller"), null)
+    )
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        Image(androidx.compose.ui.res.painterResource(
+            if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
+            null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xA0000000)))))
+        val cardWidth = (maxWidth * .22f).coerceIn(130.dp, 280.dp)
+        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            shortcuts.forEach { (label, app, settings) ->
+                Column(Modifier.width(cardWidth).height(120.dp).clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xDB202226)).clickable(enabled = app != null || settings != null) {
+                        runCatching {
+                            val intent = app?.let { android.content.Intent.makeMainActivity(it.component) }
+                                ?: android.content.Intent(requireNotNull(settings))
+                            LauncherDisplay.start(context, intent)
+                        }.onFailure {
+                            android.widget.Toast.makeText(context, "تعذر فتح $label", android.widget.Toast.LENGTH_SHORT).show()
                         }
-                    }
-                    if (apps.isEmpty()) item { Text("لا توجد تطبيقات مفضلة", color = muted(day), modifier = Modifier.padding(14.dp)) }
+                    }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    if (app != null) AppArtwork(app)
+                    else Text(if (settings != null) "◉" else "—", color = Color.White, fontSize = 28.sp)
+                    Text(label, color = Color.White, fontSize = 19.sp)
+                    if (app == null && settings == null) Text("غير مثبت", color = Color.LightGray, fontSize = 12.sp)
                 }
             }
-            MediaStrip(day)
-            if (snap.note.isNotBlank()) Text(snap.note, color = accent(day), fontSize = 12.sp)
-            }
         }
-    }
-}
-
-@Composable
-private fun HomeLampReadings(day: Boolean, snap: CarBridge.Snap) {
-    Column(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("حالة أنوار السيارة", color = ink(day), fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold)
-        Text("تُعرض القراءات المباشرة عند اتصال السيارة. التحكم بالأنوار غير متاح حتى تُوثّق واجهة الأوامر وصلاحياتها على جيتور T1.",
-            color = muted(day), fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LightPill("إشارة يسار", snap.reading("turn_left"), day)
-            LightPill("إشارة يمين", snap.reading("turn_right"), day)
-            LightPill("واطي", snap.reading("low_beam"), day)
-            LightPill("عالي", snap.reading("high_beam"), day)
-        }
-    }
-}
-
-@Composable
-private fun HomeAppTile(title: String, app: LaunchableApp?, day: Boolean,
-                        dockEnabled: Boolean, modifier: Modifier,
-                        viewport: androidx.compose.ui.geometry.Rect?,
-                        onDockBounds: (LaunchableApp, Rect) -> Unit, onExpand: (LaunchableApp) -> Unit) {
-    val view = LocalView.current
-    Column(modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(surface(day))
-        .border(1.dp, if (day) T1Colors.dayLine else accent(day).copy(alpha = .24f), RoundedCornerShape(9.dp))) {
-        Row(Modifier.fillMaxWidth().height(48.dp).clickable(enabled = app != null) { app?.let(onExpand) }
-            .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.weight(1f)) {
-                Text(title, color = accent(day), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Text("↗  ملء الشاشة", color = accent(day), fontSize = 13.sp)
-        }
-        Box(Modifier.fillMaxWidth().weight(1f).padding(3.dp)
-            .clip(RoundedCornerShape(5.dp))
-            .background(if (day) Color(0xFFE9EAD9) else Color(0xFF0B1411))
-            .clickable(enabled = app != null) { app?.let(onExpand) }
-            .onGloballyPositioned { coordinates ->
-                if (dockEnabled && app != null) {
-                    // Clip the slot to the visible page so a window never covers the bars or shortcuts.
-                    val slot = coordinates.boundsInRoot()
-                    val root = viewport?.let { if (slot.overlaps(it)) slot.intersect(it) else androidx.compose.ui.geometry.Rect.Zero } ?: slot
-                    val origin = IntArray(2)
-                    view.getLocationOnScreen(origin)
-                    onDockBounds(app, Rect((origin[0] + root.left).roundToInt(),
-                        (origin[1] + root.top).roundToInt(),
-                        (origin[0] + root.right).roundToInt(),
-                        (origin[1] + root.bottom).roundToInt()))
-                }
-            }, contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (app != null) AppArtwork(app)
-                Text(when {
-                    app == null -> "$title غير مثبت"
-                    !dockEnabled -> "اضغط لفتح $title · العرض المصغّر يحتاج النوافذ العائمة"
-                    else -> "اضغط لفتح $title"
-                }, color = muted(day), fontSize = 13.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroReading(label: String, value: String) {
-    Column {
-        Text(label, color = Color(0xFFDDD6C4), fontSize = 11.sp)
-        Text(value, color = Color.White, fontSize = 17.sp, fontFamily = FontFamily.SansSerif,
-            fontWeight = FontWeight.Medium)
     }
 }
 
@@ -435,7 +292,7 @@ private fun HomeQuickTile(icon: String, label: String, day: Boolean, modifier: M
 }
 
 @Composable
-fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
+fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onTheme: (Boolean) -> Unit, onClassic: () -> Unit, onWindows: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val stageHeight = (maxHeight * .62f).coerceIn(340.dp, 540.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -470,6 +327,7 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
             SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
         }
         VehicleControlPanel(day, snap)
+        OemControlTiles(day, onTheme, onClassic)
         OemSettingsCard(day)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -479,6 +337,50 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onWindows: () -> Unit) {
             LightPill("عالٍ", snap.reading("high_beam"), day)
         }
     }
+    }
+}
+
+@Composable
+private fun OemControlTiles(day: Boolean, onTheme: (Boolean) -> Unit, onClassic: () -> Unit) {
+    val context = LocalContext.current
+    val controls = listOf(
+        "عدادات كلاسيكية" to "cluster", "ضبط مرآة الرؤية الخلفية" to "mirrors",
+        "تحذير مغادرة المسار" to "", "التحكم في نزول المنحدرات" to "",
+        "تبريد المركبة على الطرق الوعرة" to "", "الإضاءة المحيطة" to "",
+        "الباب الخلفي الكهربائي" to "tailgate", "التشغيل والإيقاف التلقائي" to "",
+        "ESP OFF" to "", "رادار العبور" to "", "إيقاف تشغيل الشاشة" to "dark",
+        "شعاع ذكي عالي / منخفض" to "", "ذاكرة المقعد" to "", "الأجهزة المتصلة" to "devices",
+        "سطوع الشاشة" to "brightness", "شاشة توقف" to "dark", "AUTO" to "brightness",
+        "الوضع النهاري" to "day", "الوضع الليلي" to "night"
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        controls.chunked(5).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (label, action) ->
+                    OutlinedButton(modifier = Modifier.weight(1f).heightIn(min = 72.dp), onClick = {
+                        runCatching {
+                            when (action) {
+                                "cluster" -> onClassic()
+                                "day" -> onTheme(true)
+                                "night" -> onTheme(false)
+                                "dark" -> LauncherDisplay.start(context, android.content.Intent(context, JctBlackActivity::class.java))
+                                "devices" -> LauncherDisplay.start(context, android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                                "brightness" -> LauncherDisplay.start(context, android.content.Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS))
+                                else -> OemSettings.open(context, action)
+                            }
+                        }.onFailure {
+                            android.widget.Toast.makeText(context, "التطبيق المطلوب غير متاح", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(label, color = ink(day), textAlign = TextAlign.Center)
+                            if (action.isEmpty()) Text("إعدادات جيتور", color = muted(day), fontSize = 11.sp)
+                        }
+                    }
+                }
+                repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
     }
 }
 
