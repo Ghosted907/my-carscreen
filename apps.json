@@ -48,6 +48,19 @@
       "notes": "Open the controls on the main screen. The gauge view is started on the cluster display from inside the app. Read-only vehicle signals. No vehicle writes and no system-app changes."
     },
     {
+      "id": "waze",
+      "name": "ويز · Waze",
+      "package": "com.waze",
+      "versionCode": 1030489,
+      "versionName": "4.107.1.0",
+      "apk": "https://media.githubusercontent.com/media/Ghosted907/my-carscreen/dist/apps/waze-4.107.1.0-jcartools.apk",
+      "sha256": "b07713a7c86fc4c1b2d9fa30d36bbe9e40ca7295b0b23004f273b4de4d1eeaec",
+      "size": 105332170,
+      "display": 0,
+      "external": false,
+      "postInstall": [],
+      "notes": "نسخة JCarTools/NaviStart نفسها (dwn.jcartools.ru/waze.apk) بدون أي تعديل. موقّعة بمفتاح غير مفتاح ويز الرسمي، فما تركب فوق ويز من المتجر إلا بعد حذفه. الملف محفوظ عبر Git LFS."
+    },    {
       "id": "revanced",
       "name": "YouTube ReVanced",
       "package": "app.revanced.android.youtube",
