@@ -3,6 +3,20 @@ export const APPS_JSON_URL =
 
 const OUR_PACKAGE = /^com\.ghosted907\.[A-Za-z0-9_]+$/;
 
+/**
+ * Third-party packages we host on dist by explicit owner decision. Keep this list
+ * short and exact. Post-install steps stay limited to our own packages.
+ */
+const HOSTED_THIRD_PARTY = new Set(["com.waze"]);
+
+export function isAllowedDistPackage(packageName: string): boolean {
+  return OUR_PACKAGE.test(packageName) || HOSTED_THIRD_PARTY.has(packageName);
+}
+
+export function isOurPackage(packageName: string): boolean {
+  return OUR_PACKAGE.test(packageName);
+}
+
 export type DistApp = {
   id: string;
   name: string;
@@ -29,12 +43,16 @@ export type VersionRelation = "missing" | "older" | "current" | "newer" | "syste
 export function isHostedReleaseApk(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" &&
-      parsed.host === "raw.githubusercontent.com" &&
-      parsed.pathname.startsWith("/Ghosted907/my-carscreen/dist/") &&
-      parsed.pathname.endsWith(".apk")
-    );
+    if (parsed.protocol !== "https:" || !parsed.pathname.endsWith(".apk")) return false;
+    if (parsed.search || parsed.hash) return false;
+    if (parsed.host === "raw.githubusercontent.com") {
+      return parsed.pathname.startsWith("/Ghosted907/my-carscreen/dist/");
+    }
+    // Git LFS files on the dist branch are served from the media host.
+    if (parsed.host === "media.githubusercontent.com") {
+      return parsed.pathname.startsWith("/media/Ghosted907/my-carscreen/dist/");
+    }
+    return false;
   } catch {
     return false;
   }
@@ -46,7 +64,7 @@ export function canInstallFromDist(app: DistApp): boolean {
     app.versionCode !== null &&
     typeof app.sha256 === "string" &&
     /^[0-9a-f]{64}$/i.test(app.sha256) &&
-    OUR_PACKAGE.test(app.packageName) &&
+    isAllowedDistPackage(app.packageName) &&
     isHostedReleaseApk(app.apk)
   );
 }
@@ -79,6 +97,10 @@ export function isSignatureMismatch(message: string): boolean {
   return /INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match/i.test(message);
 }
 
+export function isVersionDowngrade(message: string): boolean {
+  return /INSTALL_FAILED_VERSION_DOWNGRADE|downgrade/i.test(message);
+}
+
 /** Only the release manifest's own-app steps. No vehicle writes and no system packages. */
 export function isAllowedPostInstall(command: string, packageName: string): boolean {
   if (!OUR_PACKAGE.test(packageName)) return false;
@@ -101,7 +123,12 @@ export async function sha256Hex(data: BufferSource): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-export async function fetchVerifiedApk(app: DistApp): Promise<Uint8Array> {
+export type DownloadProgress = (received: number, total: number | null) => void;
+
+export async function fetchVerifiedApk(
+  app: DistApp,
+  onProgress?: DownloadProgress,
+): Promise<Uint8Array<ArrayBuffer>> {
   if (!canInstallFromDist(app) || !app.sha256) {
     throw new Error("هذا التطبيق ما ينزّل من المستودع.");
   }
@@ -109,7 +136,34 @@ export async function fetchVerifiedApk(app: DistApp): Promise<Uint8Array> {
   if (!response.ok) {
     throw new Error(`تعذّر تنزيل ${app.name} (${response.status}).`);
   }
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const headerSize = Number(response.headers.get("content-length"));
+  const total = app.size ?? (Number.isFinite(headerSize) && headerSize > 0 ? headerSize : null);
+  let bytes: Uint8Array<ArrayBuffer>;
+  if (response.body && total !== null) {
+    // One buffer of the expected size, filled as chunks arrive. No second copy.
+    const buffer = new Uint8Array(new ArrayBuffer(total));
+    const reader = response.body.getReader();
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      if (received + value.byteLength > total) {
+        await reader.cancel();
+        throw new Error(`حجم ${app.name} ما يطابق apps.json. ما ثبّتنا الملف.`);
+      }
+      buffer.set(value, received);
+      received += value.byteLength;
+      onProgress?.(received, total);
+    }
+    if (received !== total) {
+      throw new Error(`حجم ${app.name} ما يطابق apps.json. ما ثبّتنا الملف.`);
+    }
+    bytes = buffer;
+  } else {
+    bytes = new Uint8Array(await response.arrayBuffer());
+    onProgress?.(bytes.byteLength, bytes.byteLength);
+  }
   if (app.size !== null && bytes.byteLength !== app.size) {
     throw new Error(`حجم ${app.name} ما يطابق apps.json. ما ثبّتنا الملف.`);
   }

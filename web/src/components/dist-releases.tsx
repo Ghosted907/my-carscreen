@@ -14,7 +14,9 @@ import {
   compareVersion,
   fetchVerifiedApk,
   isAllowedPostInstall,
+  isOurPackage,
   isSignatureMismatch,
+  isVersionDowngrade,
   loadDistApps,
   parsePackageDump,
   type DistApp,
@@ -58,6 +60,7 @@ export function DistReleases({
   const [installed, setInstalled] = useState<Record<string, InstalledPackage>>({});
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
   function log(level: "info" | "ok" | "err", text: string) {
     onLog?.(level, text);
@@ -116,20 +119,38 @@ export function DistReleases({
     setBusy(app.id);
     try {
       log("info", `تنزيل ${app.name} والتحقق من البصمة`);
-      const bytes = await fetchVerifiedApk(app);
-      const copy = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(copy).set(bytes);
-      const file = new File([copy], `${app.id}.apk`, {
+      let lastPercent = -1;
+      const bytes = await fetchVerifiedApk(app, (received, total) => {
+        const mb = (received / 1048576).toFixed(1);
+        if (total === null) {
+          setProgress(`${mb} MB`);
+          return;
+        }
+        const percent = Math.floor((received / total) * 100);
+        if (percent === lastPercent) return;
+        lastPercent = percent;
+        setProgress(`${percent}% · ${mb}/${(total / 1048576).toFixed(1)} MB`);
+      });
+      setProgress("تثبيت…");
+      log("ok", `البصمة مطابقة. نثبّت ${app.name}`);
+      const file = new File([bytes], `${app.id}.apk`, {
         type: "application/vnd.android.package-archive",
       });
+      const own = isOurPackage(app.packageName);
       try {
         await installApk(file);
       } catch (err) {
         const message = explainUsbError(err);
-        if (!replaceDebug && isSignatureMismatch(message) && current.installed && !current.system) {
-          const confirmed = window.confirm(
-            `${app.name} المثبت موقّع بمفتاح مختلف، وغالباً هذه نسخة debug. نسخة الإصدار ما تركب فوقها إلا بعد الحذف. تحذف النسخة الحالية الآن ثم تثبّت نسخة الإصدار؟`,
-          );
+        const mismatch = isSignatureMismatch(message);
+        const downgrade = isVersionDowngrade(message);
+        if (!replaceDebug && (mismatch || downgrade) && current.installed && !current.system) {
+          const reason = mismatch
+            ? own
+              ? `${app.name} المثبت موقّع بمفتاح مختلف، وغالباً هذه نسخة debug. نسخة الإصدار ما تركب فوقها إلا بعد الحذف.`
+              : `${app.name} المثبت موقّع بمفتاح غير مفتاح نسخة المستودع (هذه نسخة JCarTools وليست توقيع ويز الرسمي)، فما تركب فوقه إلا بعد حذفه. الحذف يمسح بيانات ${app.name} على الشاشة مثل تسجيل الدخول والأماكن المحفوظة.`
+              : `${app.name} المثبت (${current.versionName ?? "?"}) أحدث من نسخة المستودع ${app.versionName ?? ""}، وأندرويد ما يرجّع لإصدار أقدم إلا بعد الحذف. الحذف يمسح بيانات ${app.name} على الشاشة.`;
+          log("err", reason);
+          const confirmed = window.confirm(`${reason}\n\nتحذف النسخة الحالية الآن ثم تثبّت نسخة المستودع؟`);
           if (!confirmed) {
             log("info", "توقفنا. ما انحذف شيء.");
             return;
@@ -142,6 +163,14 @@ export function DistReleases({
           await uninstallPackage(app.packageName);
           log("ok", `انحذفت النسخة السابقة من ${app.name}`);
           await installApk(file);
+        } else if (mismatch) {
+          throw new Error(
+            `${app.name}: التوقيع ما يطابق النسخة المثبتة، فما ركب التثبيت. (${message})`,
+          );
+        } else if (downgrade) {
+          throw new Error(
+            `${app.name}: النسخة المثبتة أحدث من نسخة المستودع، وأندرويد يرفض الرجوع لإصدار أقدم بدون حذف. (${message})`,
+          );
         } else {
           throw err;
         }
@@ -158,6 +187,7 @@ export function DistReleases({
       log("err", explainUsbError(err));
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -168,7 +198,7 @@ export function DistReleases({
       </p>
       <h2 className="mt-2 text-xl font-semibold">إصدارات المستودع</h2>
       <p className="mt-2 text-sm text-muted">
-        التنزيل من فرع dist، وبعدها نطابق بصمة SHA-256 قبل التثبيت. إذا الملف ما
+        التنزيل من فرع dist (الملفات الكبيرة مثل ويز عبر Git LFS)، وبعدها نطابق بصمة SHA-256 قبل التثبيت. إذا الملف ما
         يطابق apps.json نرفضه. الانتقال من نسخة debug يحتاج حذفاً لأن التوقيع
         مختلف، والحذف ما يصير إلا بعد ما توافق صراحة.
       </p>
@@ -213,7 +243,7 @@ export function DistReleases({
                       onClick={() => void installRelease(app, false)}
                       disabled={!connected || busy !== null || relation === "system"}
                     >
-                      {busy === app.id ? "جارٍ…" : action}
+                      {busy === app.id ? (progress ?? "جارٍ…") : action}
                     </Button>
                   ) : null}
                   {!installable && app.apk ? (

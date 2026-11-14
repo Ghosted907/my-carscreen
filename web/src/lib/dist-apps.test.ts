@@ -7,6 +7,7 @@ import {
   isAllowedPostInstall,
   isHostedReleaseApk,
   isSignatureMismatch,
+  isVersionDowngrade,
   parsePackageDump,
   sha256Hex,
   type DistApp,
@@ -84,6 +85,49 @@ test("signature mismatch is recognized and a bad hash is refused", async () => {
     );
     const file = await fetchVerifiedApk({ ...release, sha256: digest, size: 4 });
     assert.deepEqual(file, bytes);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+const waze: DistApp = {
+  ...release,
+  id: "waze",
+  name: "ويز",
+  packageName: "com.waze",
+  apk: "https://media.githubusercontent.com/media/Ghosted907/my-carscreen/dist/apps/waze-4.107.1.0-jcartools.apk",
+};
+
+test("waze from the dist LFS media URL is allowed, other third-party packages are not", () => {
+  assert.equal(canInstallFromDist(waze), true);
+  assert.equal(canInstallFromDist({ ...waze, packageName: "com.google.android.apps.maps" }), false);
+  assert.equal(
+    canInstallFromDist({ ...waze, apk: "https://media.githubusercontent.com/media/Someone/repo/dist/w.apk" }),
+    false,
+  );
+  assert.equal(
+    canInstallFromDist({ ...waze, apk: "https://media.githubusercontent.com/media/Ghosted907/my-carscreen/main/w.apk" }),
+    false,
+  );
+  assert.equal(isAllowedPostInstall("appops set com.waze SYSTEM_ALERT_WINDOW allow", "com.waze"), false);
+});
+
+test("downgrade failures are recognized", () => {
+  assert.equal(isVersionDowngrade("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]"), true);
+  assert.equal(isVersionDowngrade("Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]"), false);
+});
+
+test("streamed download reports progress and refuses oversize bodies", async () => {
+  const bytes = new Uint8Array([9, 8, 7, 6, 5]);
+  const digest = await sha256Hex(bytes);
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(bytes, { status: 200 });
+  try {
+    const seen: number[] = [];
+    const file = await fetchVerifiedApk({ ...waze, sha256: digest, size: 5 }, (r) => seen.push(r));
+    assert.deepEqual(file, bytes);
+    assert.equal(seen.at(-1), 5);
+    await assert.rejects(() => fetchVerifiedApk({ ...waze, sha256: digest, size: 4 }), /حجم/);
   } finally {
     globalThis.fetch = original;
   }
