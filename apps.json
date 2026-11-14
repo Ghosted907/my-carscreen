@@ -1,5 +1,5 @@
 {
-  "tag": "v1.15.1",
+  "tag": "v1.15.4",
   "apps": [
     {
       "id": "t1remote",
@@ -18,11 +18,11 @@
       "id": "t1launcher",
       "name": "T1",
       "package": "com.ghosted907.t1launcher",
-      "versionCode": 37,
-      "versionName": "1.15.1",
+      "versionCode": 40,
+      "versionName": "1.15.4",
       "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1launcher-release.apk",
-      "sha256": "a14543622054e8531863117cbc70b036bcb6a125c22ae546c6c24ecd8a463542",
-      "size": 39066277,
+      "sha256": "b593eb6cf6e6025e155348c287deb50e3d06ee201bf53ad17d3e2cd22e599ef5",
+      "size": 39099045,
       "display": 0,
       "external": false,
       "postInstall": [
@@ -31,7 +31,7 @@
         "settings put global enable_freeform_support 1",
         "settings put global force_resizable_activities 1"
       ],
-      "notes": "Home shortcuts, floating launcher navigation, and cluster artwork display and removal."
+      "notes": "Custom home shortcut artwork and selectable launcher wallpaper."
     },
     {
       "id": "clusterdiag",
