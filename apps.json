@@ -1,5 +1,5 @@
 {
-  "tag": "v1.15.9",
+  "tag": "v1.15.10",
   "apps": [
     {
       "id": "t1remote",
@@ -18,11 +18,11 @@
       "id": "t1launcher",
       "name": "T1",
       "package": "com.ghosted907.t1launcher",
-      "versionCode": 45,
-      "versionName": "1.15.9",
+      "versionCode": 46,
+      "versionName": "1.15.10",
       "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1launcher-release.apk",
-      "sha256": "c621979ea0f59bec6758951af735f662bb5bab2f57533507ea076d00d989942c",
-      "size": 39082661,
+      "sha256": "4e3988741a1063ef2cb387b6ae746e887d4893097157c96d7ccb35c46d0e6275",
+      "size": 39099045,
       "display": 0,
       "external": false,
       "postInstall": [
@@ -31,7 +31,7 @@
         "settings put global enable_freeform_support 1",
         "settings put global force_resizable_activities 1"
       ],
-      "notes": "1.15.9: gold JETOUR T1 and day/night chips on every page, one floating button (app icon, top-right), phone window/sunroof/sunshade control always allowed."
+      "notes": "1.15.10: the single floating button is always shown on every page and over other apps; style picker and long-press drag are back (default app icon at top-right)."
     },
     {
       "id": "clusterdiag",
