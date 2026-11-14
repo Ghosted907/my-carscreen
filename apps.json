@@ -1,0 +1,107 @@
+{
+  "tag": "v1.15.0",
+  "apps": [
+    {
+      "id": "t1remote",
+      "name": "T1 Remote \u00b7 \u062a\u0637\u0628\u064a\u0642 \u0627\u0644\u062c\u0648\u0627\u0644",
+      "package": "com.ghosted907.t1remote",
+      "versionCode": 5,
+      "versionName": "1.2.0",
+      "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1remote-release.apk",
+      "sha256": "c4f2849ae811d713062b1b9899a956e0296ad92fe39ae85b93d30628e3cb3d37",
+      "size": 6509435,
+      "external": false,
+      "postInstall": [],
+      "notes": "\u064a\u062b\u0628\u062a \u0639\u0644\u0649 \u0627\u0644\u062c\u0648\u0627\u0644. \u0627\u0644\u0631\u0633\u0645 \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0648\u0627\u0644\u0645\u0644\u0635\u0642\u0627\u062a \u0648\u0627\u0644\u0635\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0639\u062f\u0627\u062f\u0627\u062a \u0639\u0628\u0631 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062d\u0644\u064a\u0629 \u0628\u062f\u0648\u0646 \u0631\u0645\u0632 \u0627\u0642\u062a\u0631\u0627\u0646."
+    },
+    {
+      "id": "t1launcher",
+      "name": "T1",
+      "package": "com.ghosted907.t1launcher",
+      "versionCode": 33,
+      "versionName": "1.14.0",
+      "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/t1launcher-release.apk",
+      "sha256": "f11b72a970f9d479b7efefe1e2ab5f94c7e996bf800be0534014e2771e15dc01",
+      "size": 39098949,
+      "display": 0,
+      "external": false,
+      "postInstall": [
+        "appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow",
+        "cmd notification allow_listener com.ghosted907.t1launcher/com.ghosted907.t1launcher.T1NotificationListener",
+        "settings put global enable_freeform_support 1",
+        "settings put global force_resizable_activities 1"
+      ],
+      "notes": "Main display launcher. Freeform settings let apps open in a window on the cluster. Does not replace the OEM home and does not change system apps."
+    },
+    {
+      "id": "clusterdiag",
+      "name": "Cluster Diag",
+      "package": "com.ghosted907.clusterdiag",
+      "versionCode": 8,
+      "versionName": "1.7.0",
+      "apk": "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist/clusterdiag-release.apk",
+      "sha256": "9ead48ff2b34b73591f6cf3e333af7b1808fab7755e7d689739d26c8818cc7a3",
+      "size": 9945522,
+      "display": 0,
+      "external": false,
+      "postInstall": [],
+      "notes": "Open the controls on the main screen. The gauge view is started on the cluster display from inside the app. Read-only vehicle signals. No vehicle writes and no system-app changes."
+    },
+    {
+      "id": "revanced",
+      "name": "YouTube ReVanced",
+      "package": "app.revanced.android.youtube",
+      "versionCode": null,
+      "versionName": null,
+      "apk": "https://revanced.app/",
+      "sha256": null,
+      "size": null,
+      "display": null,
+      "external": true,
+      "postInstall": [],
+      "notes": "Official ReVanced site only. This repo does not re-host the app."
+    },
+    {
+      "id": "microg",
+      "name": "microG",
+      "package": "com.google.android.gms",
+      "versionCode": null,
+      "versionName": null,
+      "apk": "https://microg.org/download.html",
+      "sha256": null,
+      "size": null,
+      "display": null,
+      "external": true,
+      "postInstall": [],
+      "notes": "Official microG download page only. This repo does not re-host the app."
+    },
+    {
+      "id": "rustore",
+      "name": "RuStore",
+      "package": "ru.vk.store",
+      "versionCode": null,
+      "versionName": null,
+      "apk": "https://www.rustore.ru/",
+      "sha256": null,
+      "size": null,
+      "display": null,
+      "external": true,
+      "postInstall": [],
+      "notes": "Official RuStore site only. This repo does not re-host the app."
+    },
+    {
+      "id": "maps",
+      "name": "Google Maps",
+      "package": "com.google.android.apps.maps",
+      "versionCode": null,
+      "versionName": null,
+      "apk": "https://play.google.com/store/apps/details?id=com.google.android.apps.maps",
+      "sha256": null,
+      "size": null,
+      "display": null,
+      "external": true,
+      "postInstall": [],
+      "notes": "Official Play Store listing only. This repo does not re-host the app."
+    }
+  ]
+}
