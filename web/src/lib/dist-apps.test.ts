@@ -112,6 +112,29 @@ test("waze from the dist LFS media URL is allowed, other third-party packages ar
   assert.equal(isAllowedPostInstall("appops set com.waze SYSTEM_ALERT_WINDOW allow", "com.waze"), false);
 });
 
+test("microG and RuStore from the dist LFS media URL are allowed, YouTube ReVanced is not hosted", () => {
+  const microg: DistApp = {
+    ...waze,
+    id: "microg",
+    packageName: "app.revanced.android.gms",
+    apk: "https://media.githubusercontent.com/media/Ghosted907/my-carscreen/dist/apps/microg-0.3.13.2.250932-revanced.apk",
+  };
+  const rustore: DistApp = {
+    ...waze,
+    id: "rustore",
+    packageName: "ru.vk.store",
+    apk: "https://media.githubusercontent.com/media/Ghosted907/my-carscreen/dist/apps/rustore-1.114.0.3.apk",
+  };
+  assert.equal(canInstallFromDist(microg), true);
+  assert.equal(canInstallFromDist(rustore), true);
+  assert.equal(canInstallFromDist({ ...microg, packageName: "com.google.android.gms" }), false);
+  assert.equal(canInstallFromDist({ ...microg, packageName: "app.revanced.android.youtube" }), false);
+  assert.equal(
+    isAllowedPostInstall("appops set ru.vk.store SYSTEM_ALERT_WINDOW allow", "ru.vk.store"),
+    false,
+  );
+});
+
 test("downgrade failures are recognized", () => {
   assert.equal(isVersionDowngrade("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]"), true);
   assert.equal(isVersionDowngrade("Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]"), false);

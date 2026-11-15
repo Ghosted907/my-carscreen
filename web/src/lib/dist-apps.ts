@@ -7,7 +7,7 @@ const OUR_PACKAGE = /^com\.ghosted907\.[A-Za-z0-9_]+$/;
  * Third-party packages we host on dist by explicit owner decision. Keep this list
  * short and exact. Post-install steps stay limited to our own packages.
  */
-const HOSTED_THIRD_PARTY = new Set(["com.waze"]);
+const HOSTED_THIRD_PARTY = new Set(["com.waze", "app.revanced.android.gms", "ru.vk.store"]);
 
 export function isAllowedDistPackage(packageName: string): boolean {
   return OUR_PACKAGE.test(packageName) || HOSTED_THIRD_PARTY.has(packageName);
