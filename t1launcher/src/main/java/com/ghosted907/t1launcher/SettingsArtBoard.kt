@@ -86,7 +86,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
     var captionSize by remember { mutableFloatStateOf(prefs.getFloat("caption_size", 28f)) }
     var fontIndex by remember { mutableIntStateOf(prefs.getInt("caption_font", 0).coerceIn(0, artFonts.lastIndex)) }
     var captionColor by remember { mutableIntStateOf(prefs.getInt("caption_color", if (day) AndroidColor.rgb(25, 55, 43) else AndroidColor.WHITE)) }
-    var drawColor by remember { mutableIntStateOf(prefs.getInt("draw_color", AndroidColor.rgb(229, 185, 71))) }
+    var drawColor by remember { mutableIntStateOf(prefs.getInt("draw_color", AndroidColor.rgb(244, 240, 229))) }
     var stickerVisible by remember { mutableStateOf(prefs.getBoolean("sticker", true)) }
     var stickerX by remember { mutableFloatStateOf(prefs.getFloat("sticker_x", .45f)) }
     var stickerY by remember { mutableFloatStateOf(prefs.getFloat("sticker_y", .44f)) }
@@ -136,7 +136,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
         }
         prefs.edit().putString("strokes", array.toString()).apply()
     }
-    val textColor = if (day) T1Colors.dayText else Color.White
+    val textColor = if (!LocalHomePage.current) T1Colors.railText(day) else if (day) T1Colors.dayText else Color.White
     fun changePalette(x: Float, y: Float) {
         val h = (x * 360f).coerceIn(0f, 359.9f)
         val s = if (y < .5f) (y * 2f).coerceIn(0f, 1f) else 1f
@@ -152,8 +152,8 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
     }
     val board = RoundedCornerShape(10.dp)
     BoxWithConstraints(modifier.clip(board)
-        .background(if (day) T1Colors.dayCard else Color(0xFF101D18))
-        .border(1.dp, T1Colors.gold.copy(alpha = .55f), board)) {
+        .t1Bg(if (day) T1Colors.dayCard else Color(0xFF101D18))
+        .border(1.dp, (if (day) T1Colors.dayText else T1Colors.nightText).copy(alpha = .55f), board)) {
         val density = LocalDensity.current
         val boardWidth = maxWidth
         val widthPx = with(density) { maxWidth.toPx() }
@@ -246,7 +246,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
         }
         }
         Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-            .background(if (day) Color(0xEDEEEDE7) else Color(0xE8081611))
+            .t1Bg(if (day) Color(0xEDEEEDE7) else Color(0xE8081611))
             .padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("مساحة العدادات", color = textColor, fontSize = 17.sp, modifier = Modifier.weight(1f))
@@ -260,7 +260,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                 }) { Text("تطبيق على العدادات") }
                 TextButton(onClick = { clusterArt.clear() }) { Text("إزالة من العدادات") }
                 ArtMode.entries.forEach { item ->
-                    FilterChip(selected = mode == item, onClick = { mode = item }, label = { Text(item.label) })
+                    FilterChip(selected = mode == item, onClick = { mode = item }, label = { Text(item.label) }, colors = t1ChipColors())
                 }
                 if (mode == ArtMode.Draw) TextButton(onClick = { strokes.clear(); saveStrokes() }) { Text("مسح الرسم") }
                 if (mode == ArtMode.Sticker) TextButton(onClick = { pickSticker.launch(arrayOf("image/*")) }) {
@@ -282,7 +282,7 @@ fun SettingsArtBoard(day: Boolean, modifier: Modifier = Modifier) {
                     artFonts.forEachIndexed { index, (label, family) ->
                         FilterChip(selected = fontIndex == index, onClick = {
                             fontIndex = index; prefs.edit().putInt("caption_font", index).apply()
-                        }, label = { Text(label, fontFamily = family, fontSize = 11.sp) })
+                        }, label = { Text(label, fontFamily = family, fontSize = 11.sp) }, colors = t1ChipColors())
                     }
                 }
             }

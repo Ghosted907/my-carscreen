@@ -147,7 +147,7 @@ export async function installApk(file: File): Promise<void> {
       return reader.cancel(reason);
     },
   });
-  await pm.installStream(file.size, stream, {
+  await pm.pushAndInstallStream(stream, {
     grantRuntimePermissions: true,
     allowTest: true,
     user: 0,

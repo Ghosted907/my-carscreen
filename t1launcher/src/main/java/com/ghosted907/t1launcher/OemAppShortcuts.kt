@@ -37,10 +37,10 @@ fun OemAppShortcuts(day: Boolean, apps: List<LaunchableApp>) {
     }
     if (available.isEmpty()) return
 
-    val fg = if (day) T1Colors.dayText else T1Colors.nightText
-    val bg = if (day) T1Colors.dayCard else T1Colors.nightCard
+    val fg = t1CardText(day)
+    val bg = T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard)
     Column(
-        Modifier.fillMaxWidth().background(bg, RoundedCornerShape(12.dp)).padding(12.dp),
+        Modifier.fillMaxWidth().t1Bg(bg, RoundedCornerShape(12.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text("تطبيقات جيتور", color = fg, fontSize = 16.sp)
@@ -49,7 +49,7 @@ fun OemAppShortcuts(day: Boolean, apps: List<LaunchableApp>) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             available.forEach { (label, component) ->
-                OutlinedButton(onClick = { openOemApp(context, label, component) }) {
+                T1OutlinedButton(onClick = { openOemApp(context, label, component) }) {
                     Text(label, color = fg, maxLines = 1)
                 }
             }

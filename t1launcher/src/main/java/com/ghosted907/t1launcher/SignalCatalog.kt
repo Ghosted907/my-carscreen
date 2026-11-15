@@ -17,6 +17,8 @@ object SignalCatalog {
     private fun vehicle(key: String, label: String, id: Int, unit: String, min: Double, max: Double, float: Boolean = false) =
         SignalDefinition(key, label, SignalGroup.DRIVE, if (float) SignalSource.VEHICLE_FLOAT else SignalSource.VEHICLE_INT,
             id, unit, min, max, if (float) 1 else 0, confirmed = true, periodMs = 1000)
+    private fun climate(key: String, label: String, id: Int, max: Double, labels: Map<Int, String> = emptyMap()) =
+        SignalDefinition(key, label, SignalGroup.CLIMATE, SignalSource.VEHICLE_INT, id, "", 0.0, max, 0, labels, periodMs = 1000)
     val all: List<SignalDefinition> = listOf(
         vehicle("outside_oem", "الحرارة بالخارج", 1300, "°C", -60.0, 100.0, true),
         vehicle("steering", "زاوية توجيه العجلات", 2505, "°", -1080.0, 1080.0, true),
@@ -121,7 +123,19 @@ object SignalCatalog {
         ci("xmode_display", "عرض الطرق الوعرة", SignalGroup.SYSTEM, 59),
         ci("cco_display", "عرض CCO", SignalGroup.SYSTEM, 60),
         ci("range_cycle", "نظام حساب المدى", SignalGroup.SYSTEM, 99),
-        ci("energy_projection", "عرض منحنى الطاقة", SignalGroup.SYSTEM, 132)
+        ci("energy_projection", "عرض منحنى الطاقة", SignalGroup.SYSTEM, 132),
+        // VehicleService A/C keys (OEM ALHvacApp VehiclePropertyKey); the same keys the A/C controls write.
+        climate("ac_power", "المكيف · تشغيل", 1021, 1.0, onOff),
+        climate("ac_ac", "المكيف · A/C", 1000, 1.0, onOff),
+        climate("ac_auto", "المكيف · AUTO", 1002, 1.0, onOff),
+        climate("ac_sync", "المكيف · مزامنة", 1022, 1.0, onOff),
+        climate("ac_rear_defrost", "المكيف · مزيل ضباب الخلفي", 1012, 1.0, onOff),
+        climate("ac_recirc", "المكيف · تدوير الهواء", 1004, 3.0, mapOf(1 to "داخلي", 2 to "خارجي", 3 to "تلقائي")),
+        climate("ac_blow", "المكيف · اتجاه الهواء", 1013, 6.0, mapOf(1 to "الوجه", 2 to "القدمين", 3 to "الزجاج", 4 to "الوجه والقدمين", 5 to "الزجاج والقدمين")),
+        climate("ac_mode", "المكيف · الوضع", 1011, 3.0, mapOf(1 to "اقتصادي", 2 to "مريح", 3 to "قوي")),
+        climate("ac_fan", "المكيف · سرعة المروحة", 1014, 7.0),
+        SignalDefinition("ac_temp_l", "المكيف · حرارة السائق", SignalGroup.CLIMATE, SignalSource.VEHICLE_FLOAT, 1015, "°C", 10.0, 35.0, 1, periodMs = 1000),
+        SignalDefinition("ac_temp_r", "المكيف · حرارة الراكب", SignalGroup.CLIMATE, SignalSource.VEHICLE_FLOAT, 1016, "°C", 10.0, 35.0, 1, periodMs = 1000)
     )
     val byKey = all.associateBy { it.key }
     val clusterReads = all.filter { it.source == SignalSource.CLUSTER_INT || it.source == SignalSource.CLUSTER_FLOAT }.associateBy { it.address }

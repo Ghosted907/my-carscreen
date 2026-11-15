@@ -33,12 +33,16 @@ object RemoteStore {
     private const val FILE = "t1_remote"
     private fun p(c: Context) = c.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    fun enabled(c: Context) = p(c).getBoolean("enabled", false)
-    fun setEnabled(c: Context, on: Boolean) = p(c).edit().putBoolean("enabled", on).apply()
+    // 1.15.8: phone control is always on (no on/off switch). A stale "enabled=false"
+    // pref from older builds is ignored. Discovery stays plain NSD, no PIN.
+    @Suppress("UNUSED_PARAMETER")
+    fun enabled(c: Context) = true
 
-    /** Second, separate switch for the nine approved window/sunroof/sunshade commands. Off by default. */
-    fun vehicleAllowed(c: Context) = p(c).getBoolean("vehicle", false)
-    fun setVehicleAllowed(c: Context, on: Boolean) = p(c).edit().putBoolean("vehicle", on).apply()
+    /** 1.15.9: the nine approved window/sunroof/sunshade commands are always allowed from the
+     *  phone (Waleed approved). No switch; an old stored "vehicle=false" is ignored. Only the
+     *  ids in VehicleCommands.all are accepted, and the phone app keeps its long-press. */
+    @Suppress("UNUSED_PARAMETER")
+    fun vehicleAllowed(c: Context) = true
 
     fun hostId(c: Context): String = p(c).getString("host", null) ?: RemoteProtocol.randomHex(8).also {
         p(c).edit().putString("host", it).apply()
@@ -53,13 +57,9 @@ object RemoteStore {
 }
 
 object RemoteHost {
+    /** 1.15.8: always starts with the launcher process. */
     fun onProcess(context: Context) {
-        if (RemoteStore.enabled(context)) start(context)
-    }
-
-    fun setEnabled(context: Context, on: Boolean) {
-        RemoteStore.setEnabled(context, on)
-        if (on) start(context) else context.stopService(Intent(context, RemoteHostService::class.java))
+        start(context)
     }
 
     private fun start(context: Context) {
@@ -82,6 +82,9 @@ class RemoteHostService : Service() {
     private val clients = Collections.synchronizedSet(mutableSetOf<Socket>())
     private var nsd: NsdManager? = null
     private var nsdListener: NsdManager.RegistrationListener? = null
+    private val retry = android.os.Handler(android.os.Looper.getMainLooper())
+    private var bindAttempts = 0
+    @Volatile private var destroyed = false
     private lateinit var actions: RemoteActions
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -108,7 +111,13 @@ class RemoteHostService : Service() {
     private fun listen() {
         val s = runCatching {
             ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(RemoteProtocol.PORT), 8) }
-        }.getOrElse { Log.w(TAG, "bind failed ${it.message}"); stopSelf(); return }
+        }.getOrElse {
+            // The port can stay busy for a moment after a restart: retry instead of giving up for good.
+            Log.w(TAG, "bind failed ${it.message}")
+            if (bindAttempts++ < 12) retry.postDelayed({ if (server == null && !destroyed) listen() }, 5000L) else stopSelf()
+            return
+        }
+        bindAttempts = 0
         server = s
         register()
         Thread({
@@ -176,6 +185,8 @@ class RemoteHostService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
+        retry.removeCallbacksAndMessages(null)
         runCatching { nsdListener?.let { nsd?.unregisterService(it) } }
         runCatching { server?.close() }
         synchronized(clients) { clients.forEach { runCatching { it.close() } } }

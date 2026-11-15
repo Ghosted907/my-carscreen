@@ -197,7 +197,7 @@ object JctHideZone {
         if (i >= 8) { idle(); return }
         val on = i % 2 == 0
         v.animate().cancel(); v.text = if (on) "!" else ""; v.alpha = if (on) 1f else 0.25f
-        bg(if (on) "#DDF57C00" else "#AA111111")
+        bg(if (on) "#DD2F6B4C" else "#AA111111")
         h.postDelayed({ blink(i + 1) }, 180)
     }
 

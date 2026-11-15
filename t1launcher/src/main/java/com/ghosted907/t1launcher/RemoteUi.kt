@@ -26,37 +26,25 @@ import androidx.compose.ui.unit.sp
 import com.ghosted907.t1remote.protocol.RemoteProtocol
 import kotlinx.coroutines.delay
 
-/** Settings card for "التحكم من الجوال". Everything here is off until the owner turns it on. */
+/** Settings card for "التحكم من الجوال". 1.15.8: always on, no on/off switch. */
 @Composable
 fun RemoteSettingsCard(day: Boolean) {
     val context = LocalContext.current
-    val text = if (day) T1Colors.dayText else T1Colors.nightText
-    val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
-    var enabled by remember { mutableStateOf(RemoteStore.enabled(context)) }
-    var vehicle by remember { mutableStateOf(RemoteStore.vehicleAllowed(context)) }
+    val text = t1CardText(day)   // 1.15.11: card text, cream in day mode on the dark fill
+    val muted = t1CardMuted(day)
     var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(enabled) { while (enabled) { delay(1000); tick++ } }
-    val ips = remember(tick / 5, enabled) { if (enabled) RemoteHost.addresses() else emptyList() }
+    LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
+    val ips = remember(tick / 5) { RemoteHost.addresses() }
 
     Column(
         Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(if (day) T1Colors.dayCard else T1Colors.nightCard).padding(16.dp),
+            .t1Bg(T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("التحكم من الجوال", color = text, fontSize = 20.sp, modifier = Modifier.weight(1f))
-            Switch(checked = enabled, onCheckedChange = { enabled = it; RemoteHost.setEnabled(context, it) })
-        }
-        if (!enabled) {
-            Text("مطفأ: لا يوجد أي اتصال. شغّله ليظهر T1 في تطبيق T1 Remote على نفس شبكة الواي فاي.", color = muted, fontSize = 14.sp)
-            return@Column
-        }
+        Text("التحكم من الجوال", color = text, fontSize = 20.sp)
         Text("العنوان: ${ips.joinToString("  ·  ").ifEmpty { "غير متصل بشبكة" }}  منفذ ${RemoteProtocol.PORT}", color = text, fontSize = 15.sp)
         Text("يظهر في تطبيق T1 Remote باسم «${RemoteProtocol.SERVICE_NAME}». أي جوال على نفس الشبكة يقدر يتحكم، فاستخدم هوتسبوت جوالك.", color = muted, fontSize = 13.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("السماح بالنوافذ والسقف والستارة من الجوال (ضغط مطوّل)", color = text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Switch(checked = vehicle, onCheckedChange = { vehicle = it; RemoteStore.setVehicleAllowed(context, it) })
-        }
+        Text("النوافذ والسقف والستارة مسموحة من الجوال دائماً (ضغط مطوّل في التطبيق).", color = text, fontSize = 15.sp)
         Spacer(Modifier.padding(2.dp))
     }
 }

@@ -56,8 +56,8 @@ fun jctCatalog(context: Context): List<String> =
 @Composable
 private fun Card(title: String, day: Boolean, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(15.dp))
-        .background(if (day) T1Colors.dayCard else T1Colors.nightCard).padding(16.dp)) {
-        Text(title, color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 19.sp)
+        .t1Bg(T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard)).padding(16.dp)) { // 1.15.11: Home button fill
+        Text(title, color = t1CardText(day), fontSize = 19.sp)
         Spacer(Modifier.height(8.dp))
         content()
     }
@@ -66,14 +66,15 @@ private fun Card(title: String, day: Boolean, content: @Composable ColumnScope.(
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, day: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
+        Text(label, color = t1CardText(day), fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange, colors = t1SwitchColors())
     }
 }
 
 @Composable
-private fun Note(text: String, day: Boolean) =
-    Text(text, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
+private fun Note(text: String, day: Boolean, onCard: Boolean = true) =
+    Text(text, color = if (onCard) t1CardMuted(day) else if (day) T1Colors.dayMuted else T1Colors.nightMuted,
+        fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
 
 private data class PickerOption(val label: String, val packageName: String? = null, val select: () -> Unit)
 
@@ -83,7 +84,8 @@ private fun GridPickerDialog(title: String, options: List<PickerOption>, onDismi
     val context = LocalContext.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.80f).fillMaxHeight(.78f),
-            shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(18.dp), color = t1Solid(MaterialTheme.colorScheme.surface),
+            contentColor = t1OnButton() ?: MaterialTheme.colorScheme.onSurface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .45f))) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -100,7 +102,7 @@ private fun GridPickerDialog(title: String, options: List<PickerOption>, onDismi
                                 context.packageManager.getApplicationIcon(pkg).toBitmap(48, 48).asImageBitmap()
                             }.getOrNull() }
                         }
-                        OutlinedButton(onClick = option.select,
+                        OutlinedButton(onClick = option.select, // dialog: unchanged
                             modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp),
                             shape = RoundedCornerShape(10.dp)) {
                             if (icon != null) {
@@ -124,8 +126,8 @@ fun JctActionPicker(label: String, key: String, day: Boolean, onChanged: () -> U
     var value by remember(key) { mutableStateOf(JctStore.str(context, key, JctActions.NOT_VALUE)) }
     var open by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 14.sp, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { open = true }) { Text(jctLabel(context, value), maxLines = 1) }
+        Text(label, color = t1CardText(day), fontSize = 14.sp, modifier = Modifier.weight(1f))
+        T1OutlinedButton(onClick = { open = true }) { Text(jctLabel(context, value), maxLines = 1) }
     }
     if (open) ActionDialog(onDismiss = { open = false }) { raw ->
         JctStore.putStr(context, key, raw); value = raw; open = false; onChanged()
@@ -188,9 +190,9 @@ fun JctSettingsPage(day: Boolean, onBack: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("تشغيل التطبيقات والتحكم المريح", "App launch and quick controls"), color = if (day) T1Colors.dayText else T1Colors.nightText, fontSize = 24.sp, modifier = Modifier.weight(1f))
-                Button(onClick = onBack) { Text(tr("رجوع", "Back")) }
+                T1Button(onClick = onBack) { Text(tr("رجوع", "Back")) }
             }
-            Note(tr("اختصارات التطبيقات والشاشات والإيماءات في T1 Launcher.", "App, display, and gesture shortcuts for T1 Launcher."), day)
+            Note(tr("اختصارات التطبيقات والشاشات والإيماءات في T1 Launcher.", "App, display, and gesture shortcuts for T1 Launcher."), day, onCard = false)
             JctSettingsContent(day)
         }
     }
@@ -220,8 +222,8 @@ private fun LanguageCard(day: Boolean) {
     Card(tr("لغة التطبيق", "Application language"), day) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             JctLang.choices.forEach { v ->
-                if (v == current) Button(onClick = {}) { Text(JctLang.label(v, en)) }
-                else OutlinedButton(onClick = { (context as? Activity)?.let { JctLang.set(it, v) } }) { Text(JctLang.label(v, en)) }
+                if (v == current) T1Button(onClick = {}) { Text(JctLang.label(v, en)) }
+                else T1OutlinedButton(onClick = { (context as? Activity)?.let { JctLang.set(it, v) } }) { Text(JctLang.label(v, en)) }
             }
         }
         Note(tr("تتغير لغة هذه الصفحة ورسائل اختصارات التطبيقات. بقيّة الواجهة عربية حاليًا.",
@@ -240,11 +242,11 @@ fun JctClusterAppCard(day: Boolean) {
     var area by remember { mutableIntStateOf(JctStore.int(context, JctStore.PKG_AREA, 0)) }
     Card(tr("التطبيقات على لوحة العدادات", "Apps on the instrument cluster"), day) {
         OutlinedTextField(value = pkg, onValueChange = { pkg = it.trim() }, singleLine = true, label = { Text(tr("الحزمة", "Package")) }, modifier = Modifier.fillMaxWidth())
-        OutlinedButton(onClick = { choose = true }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("اختر تطبيقًا من القائمة", "Choose an app from the list")) }
+        T1OutlinedButton(onClick = { choose = true }, modifier = Modifier.padding(top = 6.dp)) { Text(tr("اختر تطبيقًا من القائمة", "Choose an app from the list")) }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = true)) area = JctStore.AREA_PRI else launchError(context) }) { Text(tr("افتح على العدادات", "Open on cluster")) }
-            Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = false)) area = JctStore.AREA_GU else launchError(context) }) { Text(tr("افتح على الشاشة الرئيسية", "Open on main screen")) }
-            OutlinedButton(onClick = {
+            T1Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = true)) area = JctStore.AREA_PRI else launchError(context) }) { Text(tr("افتح على العدادات", "Open on cluster")) }
+            T1Button(enabled = pkg.isNotBlank(), onClick = { if (JctLaunch.runPkgOn(context, pkg, cluster = false)) area = JctStore.AREA_GU else launchError(context) }) { Text(tr("افتح على الشاشة الرئيسية", "Open on main screen")) }
+            T1OutlinedButton(onClick = {
                 val toCluster = JctStore.int(context, JctStore.PKG_AREA, JctStore.AREA_GU) != JctStore.AREA_PRI
                 if (JctLaunch.runPkgOn(context, pkg, cluster = toCluster)) area = if (toCluster) JctStore.AREA_PRI else JctStore.AREA_GU else launchError(context)
             }, enabled = pkg.isNotBlank()) { Text(tr("انقل للشاشة الأخرى", "Move to other screen")) }
@@ -302,8 +304,8 @@ private fun SplitPresetsCard(day: Boolean) {
                 Note(tr("تخطيط ", "Layout ") + (index + 1) + ": " +
                     if (action.type == JctType.SPLIT) jctLabel(context, presets[index]) else tr("غير محفوظ", "Empty"), day)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { editing = index }) { Text(tr("إعداد", "Set up")) }
-                    Button(enabled = action.type == JctType.SPLIT, onClick = { JctLaunch.runSplit(context, action) }) { Text(tr("افتح", "Open")) }
+                    T1OutlinedButton(onClick = { editing = index }) { Text(tr("إعداد", "Set up")) }
+                    T1Button(enabled = action.type == JctType.SPLIT, onClick = { JctLaunch.runSplit(context, action) }) { Text(tr("افتح", "Open")) }
                     TextButton(enabled = action.type == JctType.SPLIT, onClick = {
                         presets[index] = ""; JctStore.putStr(context, key, "")
                     }) { Text(tr("مسح", "Clear")) }
@@ -322,34 +324,27 @@ private fun SplitPresetsCard(day: Boolean) {
 @Composable
 private fun FloatingCard(day: Boolean) {
     val context = LocalContext.current
-    var single by remember { mutableStateOf(JctStore.bool(context, JctStore.LOUNCHB_TRUE, true)) }
-    var multi by remember { mutableStateOf(JctStore.bool(context, JctStore.MULTI_ON, false)) }
-    var eight by remember { mutableStateOf(JctStore.int(context, JctStore.MULTI_COUNT, 8) == 8) }
     var over by remember { mutableStateOf(JctStore.bool(context, JctStore.OVER_SYSTEM, true)) }
     var floatingStyle by remember { mutableIntStateOf(JctFloatingStyle.selected(context)) }
     var chooseStyle by remember { mutableStateOf(false) }
     val sync = { JctLounchService.sync(context) }
-    Card(tr("الأزرار العائمة", "Floating buttons"), day) {
+    Card(tr("الزر العائم", "Floating button"), day) {
         if (!Settings.canDrawOverlays(context)) {
             Note(tr("يحتاج صلاحية الظهور فوق التطبيقات", "Needs the display-over-apps permission") + ": adb shell appops set com.ghosted907.t1launcher SYSTEM_ALERT_WINDOW allow", day)
             TextButton(onClick = { runCatching { LauncherDisplay.start(context, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) } }) { Text(tr("فتح إعدادات الظهور", "Open overlay settings")) }
         }
-        SwitchRow(tr("عرض الزر العائم", "Show floating button"), single, day) { single = it; JctStore.putBool(context, JctStore.LOUNCHB_TRUE, it); sync() }
-        OutlinedButton(onClick = { chooseStyle = true }) { Text("شكل الزر العائم: ${JctFloatingStyle.labels[floatingStyle]}") }
-        JctActionPicker(tr("زر عائم:", "Floating button:"), JctStore.LOUNCHB_ACTION, day)
-        Note(tr("اضغط مطولاً على الزر ثم اسحبه لمكان لا يغطي عناصر المصنع.", "Long-press the button, then drag it where it does not cover OEM controls."), day)
-        SwitchRow(tr("عرض الزر المتعدد", "Show multi-button"), multi, day) { multi = it; JctStore.putBool(context, JctStore.MULTI_ON, it); sync() }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = eight, onCheckedChange = { eight = it; JctStore.putInt(context, JctStore.MULTI_COUNT, if (it) 8 else 6); sync() })
-            Text(tr("استخدام 8 أزرار", "Use 8 buttons"), color = if (day) T1Colors.dayText else T1Colors.nightText)
+        // 1.15.10: one floating button, always shown (no on/off switch). Look and position are
+        // editable again; defaults are app icon only at the top-right.
+        T1OutlinedButton(onClick = { chooseStyle = true }) { Text("شكل الزر العائم: ${JctFloatingStyle.labels[floatingStyle]}") }
+        JctActionPicker(tr("زر عائم:", "Floating button:"), JctStore.LOUNCHB_ACTION, day) { sync() }
+        Note(tr("اضغط مطولاً على الزر ثم اسحبه لأي مكان، ويُحفظ المكان الجديد.", "Long-press the button, then drag it anywhere; the new spot is saved."), day)
+        T1OutlinedButton(onClick = { JctFloatingPosition.reset(context); sync() }) {
+            Text(tr("إرجاع الزر لمكانه الافتراضي (أعلى اليمين)", "Move the button back to the top-right"))
         }
-        val names = if (JctLang.english(context)) listOf("Top", "Bottom", "Left", "Right", "Top left", "Top right", "Bottom left", "Bottom right")
-            else listOf("أعلى", "أسفل", "يسار", "يمين", "أعلى يسار", "أعلى يمين", "أسفل يسار", "أسفل يمين")
-        names.forEachIndexed { i, n -> if (eight || i < 4) JctActionPicker(n, JctStore.MULTI_ACTION + i, day) { sync() } }
         SwitchRow(tr("الأدوات فوق عناصر النظام", "Widgets over system elements"), over, day) { over = it; JctStore.putBool(context, JctStore.OVER_SYSTEM, it); sync() }
     }
     if (chooseStyle) GridPickerDialog("شكل الزر العائم",
-        JctFloatingStyle.labels.mapIndexed { i, label -> PickerOption(label) {
+        JctFloatingStyle.choices.map { i -> PickerOption(JctFloatingStyle.labels[i]) {
             floatingStyle = i; JctStore.putInt(context, JctFloatingStyle.KEY, i); chooseStyle = false; sync()
         } }, onDismiss = { chooseStyle = false })
 }
@@ -376,7 +371,7 @@ private fun TaskGroupCard(day: Boolean) {
                 Checkbox(checked = t.enabled, onCheckedChange = { enabled ->
                     save(tasks.mapIndexed { j, item -> if (j == i) item.copy(enabled = enabled) else item })
                 })
-                OutlinedButton(onClick = { pickFor = i }, modifier = Modifier.weight(1f).padding(horizontal = 6.dp)) { Text(jctLabel(context, t.action), maxLines = 1) }
+                T1OutlinedButton(onClick = { pickFor = i }, modifier = Modifier.weight(1f).padding(horizontal = 6.dp)) { Text(jctLabel(context, t.action), maxLines = 1) }
                 TextButton(enabled = i > 0, onClick = { save(tasks.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }) { Text("▲") }
                 TextButton(enabled = i < tasks.lastIndex, onClick = { save(tasks.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }) { Text("▼") }
                 TextButton(onClick = { save(tasks.filterIndexed { j, _ -> j != i }) }) { Text(tr("حذف", "Delete")) }
@@ -385,8 +380,8 @@ private fun TaskGroupCard(day: Boolean) {
         Note(tr("علامة الاختيار تحدد الأوامر التي ستعمل. الترتيب من أعلى إلى أسفل.",
             "Checked commands run from top to bottom."), day)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { save(tasks + JctLaunch.Task("", true, false, JctActions.NOT_VALUE)); pickFor = tasks.size - 1 }) { Text(tr("إضافة أمر", "Add command")) }
-            OutlinedButton(onClick = { JctLaunch.runTaskGroup(context, JctStore.TASKS) }) { Text(tr("تجربة الآن", "Test now")) }
+            T1OutlinedButton(onClick = { save(tasks + JctLaunch.Task("", true, false, JctActions.NOT_VALUE)); pickFor = tasks.size - 1 }) { Text(tr("إضافة أمر", "Add command")) }
+            T1OutlinedButton(onClick = { JctLaunch.runTaskGroup(context, JctStore.TASKS) }) { Text(tr("تجربة الآن", "Test now")) }
         }
     }
     pickFor?.let { idx -> ActionDialog(onDismiss = { pickFor = null }) { raw ->
@@ -420,7 +415,7 @@ private fun ZonesCard(day: Boolean) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = on, onCheckedChange = { on = it; JctGestureZones.setEnabled(context, z, it) })
                 Box(Modifier.weight(1f)) { JctActionPicker(z.label(en), JctStore.ZONE_ACTION + z.name, day) }
-                OutlinedButton(onClick = { styleFor = z }) { Text(JctGestureZones.styleLabels[JctGestureZones.style(context, z)]) }
+                T1OutlinedButton(onClick = { styleFor = z }) { Text(JctGestureZones.styleLabels[JctGestureZones.style(context, z)]) }
             }
         }
     }
@@ -447,7 +442,7 @@ private fun BlackScreenCard(day: Boolean) {
             TextButton(onClick = { bright = (bright - 5).coerceIn(1, 100); JctStore.putInt(context, JctBlackActivity.KEY_BRIGHTNESS, bright) }) { Text("−") }
             TextButton(onClick = { bright = (bright + 5).coerceIn(1, 100); JctStore.putInt(context, JctBlackActivity.KEY_BRIGHTNESS, bright) }) { Text("+") }
         }
-        OutlinedButton(onClick = { JctLaunch.run(context, JctAction(JctType.ENUM, JctEnum.RUN_BLACK)) }) { Text(tr("تجربة الآن", "Test now")) }
+        T1OutlinedButton(onClick = { JctLaunch.run(context, JctAction(JctType.ENUM, JctEnum.RUN_BLACK)) }) { Text(tr("تجربة الآن", "Test now")) }
     }
 }
 
@@ -472,8 +467,8 @@ private fun HideCard(day: Boolean) {
             SwitchRow(tr("اختصار ", "Shortcut ") + s.labelAr + if (s.locked) tr(" (ثابت)", " (fixed)") else "", on, day) { if (!s.locked) { on = it; hider.setShortcut(s, it) } }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(enabled = !hidden, onClick = { confirm = true }) { Text(tr("إخفاء", "Hide")) }
-            OutlinedButton(enabled = hidden, onClick = {
+            T1Button(enabled = !hidden, onClick = { confirm = true }) { Text(tr("إخفاء", "Hide")) }
+            T1OutlinedButton(enabled = hidden, onClick = {
                 worker.execute { val r = hider.restore(); main.post { hidden = JctUserAppsHide.enabled(context); status = result("أُظهر", "shown", r); JctHideZone.dismiss() } }
             }) { Text(tr("إظهار", "Show")) }
         }

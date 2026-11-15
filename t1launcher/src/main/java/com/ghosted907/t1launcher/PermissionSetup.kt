@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -69,7 +70,11 @@ private fun openSettings(context: Context, action: String, packageUri: Boolean =
 
 /** First-run permission center; special access always uses the system consent screen. */
 @Composable
-fun PermissionSetupPage(day: Boolean, revision: Int, onContinue: () -> Unit) {
+fun PermissionSetupPage(day: Boolean, revision: Int, onContinue: () -> Unit) =
+    androidx.compose.runtime.CompositionLocalProvider(LocalHomePage provides false, LocalT1Day provides day) { PermissionSetupContent(day, revision, onContinue) }
+
+@Composable
+private fun PermissionSetupContent(day: Boolean, revision: Int, onContinue: () -> Unit) {
     val context = LocalContext.current
     var localRevision by remember { mutableIntStateOf(0) }
     val runtime = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -120,10 +125,12 @@ fun PermissionSetupPage(day: Boolean, revision: Int, onContinue: () -> Unit) {
     }
     val text = if (day) T1Colors.dayText else T1Colors.nightText
     val muted = if (day) T1Colors.dayMuted else T1Colors.nightMuted
-    val surface = if (day) T1Colors.dayCard else T1Colors.nightCard
-    Column(Modifier.fillMaxSize().background(if (day) T1Colors.dayBg else T1Colors.nightBg)
+    val surface = T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard) // 1.15.8: 80%
+    val cardText = t1CardText(day)   // 1.15.11: cream on the dark card fill in day mode
+    val cardMuted = t1CardMuted(day)
+    Column(Modifier.fillMaxSize().background(if (day) T1Colors.dayBg else T1Colors.nightBg).safeDrawingPadding()
         .padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("أذونات لانشر جيتور T1", color = T1Colors.gold, fontSize = 28.sp,
+        Text("أذونات لانشر جيتور T1", color = text, fontSize = 28.sp,
             fontWeight = FontWeight.SemiBold)
         Text("اختر تفعيل للأذونات التي يحتاجها اللانشر. بعض الأذونات تُمنح من إعدادات النظام، ويمكنك العودة لهذه الصفحة لاحقًا.",
             color = muted, fontSize = 15.sp)
@@ -133,24 +140,26 @@ fun PermissionSetupPage(day: Boolean, revision: Int, onContinue: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(permissions) { permission ->
                 Column(Modifier.fillMaxWidth().heightIn(min = 132.dp)
-                    .background(surface, RoundedCornerShape(12.dp))
-                    .border(1.dp, T1Colors.gold.copy(alpha = .35f), RoundedCornerShape(12.dp))
+                    .t1Bg(surface, RoundedCornerShape(12.dp))
+                    .border(1.dp, text.copy(alpha = .35f), RoundedCornerShape(12.dp))
                     .padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.fillMaxWidth()) {
-                        Text(permission.title, color = text, fontSize = 17.sp,
+                        Text(permission.title, color = cardText, fontSize = 17.sp,
                             fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Text(if (permission.granted) "✓ مفعّل" else "مطلوب",
-                            color = if (permission.granted) Color(0xFF80C99B) else T1Colors.gold,
+                            color = if (permission.granted) Color(0xFF80C99B) else cardText,
                             fontSize = 13.sp)
                     }
-                    Text(permission.detail, color = muted, fontSize = 12.sp)
-                    if (!permission.granted) OutlinedButton(onClick = permission.action) { Text("تفعيل") }
+                    Text(permission.detail, color = cardMuted, fontSize = 12.sp)
+                    if (!permission.granted) T1OutlinedButton(onClick = permission.action,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, text.copy(alpha = .45f))) { Text("تفعيل", color = cardText) }
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("${permissions.count { it.granted }} من ${permissions.size} مفعّلة", color = muted, fontSize = 14.sp)
-            Button(onClick = onContinue) { Text("متابعة إلى اللانشر") }
+            Button(onClick = onContinue, colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = t1Solid(T1Colors.fill(Color(0xFF173B2B))), contentColor = t1OnButton() ?: T1Colors.nightText)) { Text("متابعة إلى اللانشر") }
         }
     }
 }

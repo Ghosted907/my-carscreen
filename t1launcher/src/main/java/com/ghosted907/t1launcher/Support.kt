@@ -31,7 +31,7 @@ class ClusterAddonActivity : Activity() {
         val root = FrameLayout(this)
         val label = TextView(this)
         label.text = enabled.joinToString("  ")
-        label.setTextColor(Color.parseColor("#D4A84B"))
+        label.setTextColor(Color.parseColor("#F4F0E5"))
         label.textSize = 18f
         label.gravity = Gravity.CENTER
         root.addView(label, FrameLayout.LayoutParams(420, 80, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
@@ -143,6 +143,9 @@ class T1TouchService : android.accessibilityservice.AccessibilityService() {
     override fun onDestroy() {
         zones?.remove(); zones = null
         if (instance == this) instance = null
+        // 1.15.10: the floating button may have been drawn through this service's window manager;
+        // put it back as a normal overlay so it never disappears.
+        JctLounchService.sync(this)
         super.onDestroy()
     }
 

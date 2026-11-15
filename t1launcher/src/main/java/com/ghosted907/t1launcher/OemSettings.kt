@@ -6,6 +6,13 @@ import android.content.Intent
 import android.widget.Toast
 
 object OemSettings {
+    private val component = ComponentName(
+        "com.autolink.hmi.carsettings", "com.autolink.hmi.carsettings.activity.SettingActivity"
+    )
+
+    fun interconnectionIntent(): Intent =
+        Intent("com.autolink.hmi.carsettings.OPEN_INTERCONNECTION").setComponent(component)
+
     // Same activity actions as OEM SettingWidget. Starting an activity only.
     fun open(context: Context, section: String = "") {
         val action = when (section) {
@@ -16,8 +23,7 @@ object OemSettings {
             else -> Intent.ACTION_MAIN
         }
         try {
-            LauncherDisplay.start(context, Intent(action).setComponent(ComponentName(
-                "com.autolink.hmi.carsettings", "com.autolink.hmi.carsettings.activity.SettingActivity")))
+            LauncherDisplay.start(context, Intent(action).setComponent(component))
         } catch (_: Exception) { Toast.makeText(context, "تعذر فتح إعدادات جيتور", Toast.LENGTH_LONG).show() }
     }
 }

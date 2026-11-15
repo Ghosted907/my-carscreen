@@ -236,6 +236,31 @@ class CarBridge(private val context: Context) {
         }
     }
 
+    /**
+     * A/C write (owner-approved 2026-11-15). Same OEM path the stock A/C app (ALHvacApp) uses:
+     * VehicleService IVehicleControl.setIntDataImmediately (17) / setFloatDataImmediately (18),
+     * oneway, args (key, value, caller package). Only the keys in [Climate.keys] are accepted.
+     * Returns null when the request was handed to the service, otherwise an Arabic reason.
+     */
+    fun climateWrite(key: Int, value: Number): String? {
+        if (key !in Climate.keys.values) return "أمر التكييف غير مسموح"
+        val binder = vehicle.binder
+        if (binder == null || !vehicle.ready) { vehicle.connect(); return "خدمة السيارة غير متصلة، أعد المحاولة بعد ثوانٍ" }
+        return try {
+            if (binder.interfaceDescriptor != VEHICLE_DESC) return "واجهة خدمة السيارة غير مطابقة"
+            val request = Parcel.obtain()
+            try {
+                request.writeInterfaceToken(VEHICLE_DESC)
+                request.writeInt(key)
+                val float = value is Float || value is Double
+                if (float) request.writeFloat(value.toFloat()) else request.writeInt(value.toInt())
+                request.writeString(context.packageName)
+                if (!binder.transact(if (float) 18 else 17, request, null, IBinder.FLAG_ONEWAY)) "الأمر غير مدعوم في خدمة السيارة"
+                else null
+            } finally { request.recycle() }
+        } catch (e: Exception) { "تعذر إرسال أمر التكييف: ${e.javaClass.simpleName}" }
+    }
+
     fun openAvm(): Boolean {
         val service = runCatching {
             context.startService(Intent().setClassName("com.autolink.app.avm", "com.autolink.app.avm.AvmService").putExtra("key_type", 1))

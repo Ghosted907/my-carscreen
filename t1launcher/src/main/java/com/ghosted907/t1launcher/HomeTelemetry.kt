@@ -139,7 +139,7 @@ fun HomeVehicleTelemetry(day: Boolean, snap: CarBridge.Snap, height: Dp) {
         .background(Brush.verticalGradient(if (day)
             listOf(Color(0xFFE8E9DF), Color(0xFFCED8CA))
             else listOf(Color(0xFF1B2A26), Color(0xFF09120F))))
-        .border(1.dp, T1Colors.gold.copy(alpha = .28f), shape)
+        .border(1.dp, fg.copy(alpha = .28f), shape)
         .padding(horizontal = 18.dp, vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("المركبة  ·  JETOUR T1", color = fg, fontSize = 18.sp,
@@ -155,7 +155,7 @@ fun HomeVehicleTelemetry(day: Boolean, snap: CarBridge.Snap, height: Dp) {
                     drawOval(Color(0xFF456B3F).copy(alpha = if (day) .32f else .43f),
                         topLeft = Offset(size.width * .08f, size.height * .62f),
                         size = Size(size.width * .84f, size.height * .30f))
-                    drawOval(T1Colors.gold.copy(alpha = .46f),
+                    drawOval(fg.copy(alpha = .46f),
                         topLeft = Offset(size.width * .08f, size.height * .62f),
                         size = Size(size.width * .84f, size.height * .30f),
                         style = Stroke(1.dp.toPx()))
@@ -171,8 +171,8 @@ fun HomeVehicleTelemetry(day: Boolean, snap: CarBridge.Snap, height: Dp) {
                 }
                 Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
                     OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.width(165.dp).height(44.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(disabledContentColor = T1Colors.goldSoft.copy(alpha = .75f)),
-                        border = BorderStroke(1.dp, T1Colors.goldSoft.copy(alpha = .55f))) {
+                        colors = ButtonDefaults.outlinedButtonColors(disabledContentColor = fg.copy(alpha = .75f)),
+                        border = BorderStroke(1.dp, fg.copy(alpha = .55f))) {
                         Text("فتح الشنطة", fontSize = 16.sp)
                     }
                     Text("أمر الفتح غير موثق لهذه المركبة", color = sub, fontSize = 11.sp)
@@ -213,9 +213,9 @@ fun HomeNoteTile(day: Boolean, modifier: Modifier = Modifier) {
     var editing by remember { mutableStateOf(false) }
     Column(modifier.heightIn(min = 90.dp).clip(RoundedCornerShape(8.dp))
         .background(if (day) T1Colors.dayCard else T1Colors.nightCard)
-        .border(1.dp, T1Colors.gold.copy(alpha=.25f), RoundedCornerShape(8.dp))
+        .border(1.dp, (if (day) T1Colors.dayText else T1Colors.nightText).copy(alpha=.25f), RoundedCornerShape(8.dp))
         .clickable { editing = true }.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
-        Text("ملاحظاتي", color = T1Colors.goldSoft, fontSize = 14.sp)
+        Text("ملاحظاتي", color = (if (day) T1Colors.dayText else T1Colors.nightText), fontSize = 14.sp)
         Text(note.ifBlank { "اضغط لكتابة ملاحظة" }, color = if (day) T1Colors.dayText else T1Colors.nightText,
             fontSize = 14.sp, maxLines = 2, textAlign = TextAlign.Start)
     }

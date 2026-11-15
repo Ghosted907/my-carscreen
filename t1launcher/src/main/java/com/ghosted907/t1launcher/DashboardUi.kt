@@ -60,21 +60,26 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.roundToInt
 
-private val Sand = T1Colors.gold
+private val Sand = T1Colors.nightText // 1.15.7: no gold
 private val Mint = Color(0xFF94C9A5)
+private val JetourGold = Color(0xFFD5B36A) // emblem gold, used only for the JETOUR T1 wordmark
 private val CardShape = RoundedCornerShape(16.dp)
 private fun ink(day: Boolean) = if (day) T1Colors.dayText else T1Colors.nightText
 private fun muted(day: Boolean) = if (day) T1Colors.dayMuted else T1Colors.nightMuted
-private fun accent(day: Boolean) = if (day) Color(0xFF8A6828) else Sand
-private fun surface(day: Boolean) = if (day) T1Colors.dayCard else T1Colors.nightCard
+private fun accent(day: Boolean) = ink(day) // 1.15.7: settings-button text colour, no gold
+// 1.15.11: card/panel text on secondary pages (cream in day mode there; unchanged on Home and at night).
+@Composable private fun cInk(day: Boolean) = t1CardText(day)
+@Composable private fun cMuted(day: Boolean) = t1CardMuted(day)
+@Composable private fun cAccent(day: Boolean) = t1CardText(day)
+private fun surface(day: Boolean) = T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard) // 1.15.8: 80%
 
 @Composable
 fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Unit,
             onMic: () -> Unit, onOemAssistant: () -> Unit, onDay: () -> Unit,
             onBack: () -> Unit, content: @Composable () -> Unit) {
     val font = remember { FontFamily(Font(R.font.arabic)) }
-    val colors = if (day) lightColorScheme(primary = Color(0xFF8A6828), background = T1Colors.dayBg,
-        surface = T1Colors.dayCard, onSurface = T1Colors.dayText) else darkColorScheme(primary = Sand,
+    val colors = if (day) lightColorScheme(primary = T1Colors.dayText, onPrimary = T1Colors.nightText, background = T1Colors.dayBg,
+        surface = T1Colors.dayCard, onSurface = T1Colors.dayText) else darkColorScheme(primary = T1Colors.nightText, onPrimary = T1Colors.dayText,
         background = T1Colors.nightBg, surface = T1Colors.nightCard, onSurface = T1Colors.nightText)
     MaterialTheme(colorScheme = colors, typography = Typography(bodyLarge = TextStyle(fontFamily = font))) {
         Box(Modifier.fillMaxSize().background(colors.background)) {
@@ -83,25 +88,29 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
             else Image(androidx.compose.ui.res.painterResource(
                 if (day) R.drawable.saudi_oem_landscape_day else R.drawable.saudi_oem_landscape),
                 null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-            val shade = if (day) T1Colors.dayBg else Color.Black
-            val opacity = if (page == Page.Home) 0f else .58f
+            val shade = if (day && page != Page.Home) T1Colors.dayBg else Color.Black
+            val opacity = if (page == Page.Home) .36f else .58f
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                listOf(shade.copy(alpha = opacity), shade.copy(alpha = if (page == Page.Home) .62f else .78f)))))
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            Box {
-                DashboardHeader(day, page, snap, onMic, onOemAssistant, onDay)
-                SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
-            }
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(Modifier.weight(1f).fillMaxWidth()) {
-                    DashboardNavigation(page, day, onPage, onBack)
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        Box(Modifier.weight(1f).fillMaxHeight()
-                            .padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
+                0f to shade.copy(alpha = opacity),
+                .38f to shade.copy(alpha = if (page == Page.Home) 0f else opacity),
+                1f to shade.copy(alpha = if (page == Page.Home) .42f else .78f))))
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                // 1.15.9: the emblem/JETOUR chip and the day/night chip sit in the same top strip on
+                // every page, so the sidebar starts at the same height everywhere and nothing is covered.
+                AppsTopChips(day, onDay)
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        DashboardNavigation(page, day, onPage, onBack)
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            Box(Modifier.weight(1f).fillMaxHeight()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                // 1.15.12: secondary pages use the sidebar colours (T1Colors.rail*) in both modes.
+                                CompositionLocalProvider(LocalHomePage provides (page == Page.Home), LocalT1Day provides day) { content() }
+                            }
+                        }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -109,7 +118,7 @@ fun T1Shell(page: Page, day: Boolean, snap: CarBridge.Snap, onPage: (Page) -> Un
 @Composable
 private fun DashboardNavigation(page: Page, day: Boolean, onPage: (Page) -> Unit, onBack: () -> Unit) {
     Column(Modifier.width(88.dp).fillMaxHeight()
-        .background(if (day) Color(0xB3E9E6DA) else Color(0x9907110F))
+        .background(T1Colors.railBg(day)) // 1.15.8: 80%; 1.15.12: shared with secondary pages (#CCE9E6DA day / #CC07110F night)
         .border(width = 1.dp, color = accent(day).copy(alpha = .28f)),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Page.entries.forEach { item ->
@@ -168,6 +177,10 @@ private fun DashboardNavIcon(page: Page, color: Color) {
                 line(.18f,.3f,.82f,.3f); line(.18f,.68f,.82f,.68f)
                 drawCircle(color,s*.1f,Offset(s*.4f,s*.3f)); drawCircle(color,s*.1f,Offset(s*.66f,s*.68f))
             }
+            Page.Climate -> {
+                line(.5f,.1f,.5f,.9f); line(.15f,.3f,.85f,.7f); line(.15f,.7f,.85f,.3f)
+                line(.4f,.16f,.5f,.26f); line(.6f,.16f,.5f,.26f); line(.4f,.84f,.5f,.74f); line(.6f,.84f,.5f,.74f)
+            }
             Page.Customize -> {
                 drawCircle(color,s*.32f,Offset(s*.5f,s*.5f),style=Stroke(stroke))
                 line(.5f,.06f,.5f,.18f); line(.5f,.82f,.5f,.94f)
@@ -183,56 +196,43 @@ private fun DashboardNavIcon(page: Page, color: Color) {
     }
 }
 
+// 1.15.7: the top bar is gone. Since 1.15.9 every page shows two chips:
+// emblem + wordmark at the start and the day/night toggle at the end.
 @Composable
-private fun DashboardHeader(day: Boolean, page: Page, snap: CarBridge.Snap,
-                            onMic: () -> Unit, onOemAssistant: () -> Unit, onDay: () -> Unit) {
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(1000) } }
-    Row(Modifier.fillMaxWidth().height(52.dp)
-        .background(if (day) T1Colors.dayCard.copy(alpha = .76f) else Color(0xA6111D19))
-        .padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (page == Page.Home) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("JETOUR  T1", color = accent(day), fontSize = 14.sp,
-                    fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
-                Text(snap.reading("outside_oem").current?.let { "${it.roundToInt()} °C" } ?: "— °C",
-                    color = accent(day), fontSize = 11.sp, fontFamily = FontFamily.SansSerif)
-                Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
-                    contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 24.dp, height = 20.dp))
-            }
-        } else {
+private fun AppsTopChips(day: Boolean, onDay: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.clip(RoundedCornerShape(12.dp))
+            .background(ink(day).copy(alpha = .10f))
+            .border(1.dp, ink(day).copy(alpha = .12f), RoundedCornerShape(12.dp))
+            .heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Image(painter = androidx.compose.ui.res.painterResource(R.drawable.saudi_emblem_gold),
-                contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 36.dp, height = 40.dp))
-            Text("JETOUR  T1", color = accent(day), fontSize = 19.sp,
+                contentDescription = "السيفان والنخلة", modifier = Modifier.size(width = 30.dp, height = 34.dp))
+            // 1.15.9: the wordmark is gold on every page (the only gold besides the emblem).
+            Text("JETOUR  T1", color = JetourGold, fontSize = 17.sp,
                 fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold)
         }
-        Box(Modifier.width(1.dp).height(30.dp).background(if (day) T1Colors.dayLine else T1Colors.nightLine))
-        Text(page.ar, color = ink(day), fontSize = 19.sp, modifier = Modifier.weight(1f))
-        Text(if (snap.liveCount > 0) "● ${snap.liveCount} قراءة حية" else "○ بانتظار اتصال السيارة",
-            color = if (snap.liveCount > 0) accent(day) else muted(day), fontSize = 12.sp)
-        HeaderAction("مساعد", day, onOemAssistant)
-        HeaderAction("صوت", day, onMic)
         HeaderAction(if (day) "ليلي" else "نهاري", day, onDay)
-        if (page != Page.Home) Text(riyadhTime(now), color = ink(day), fontSize = 24.sp,
-            fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
-private fun SaudiTrim(modifier: Modifier) {
+private fun SaudiTrim(modifier: Modifier, tone: Color) {
     Canvas(modifier.height(7.dp)) {
-        val gold = T1Colors.gold.copy(alpha = .55f)
+        val line = tone.copy(alpha = .55f)
         val middle = size.height / 2f
-        drawLine(gold.copy(alpha = .35f), Offset(0f, middle), Offset(size.width, middle), 1.dp.toPx())
+        drawLine(line.copy(alpha = .35f), Offset(0f, middle), Offset(size.width, middle), 1.dp.toPx())
         val step = 28.dp.toPx()
         val half = 4.dp.toPx()
         var x = step / 2f
         while (x < size.width) {
-            drawLine(gold, Offset(x - half, middle), Offset(x, 0f), 1.dp.toPx())
-            drawLine(gold, Offset(x, 0f), Offset(x + half, middle), 1.dp.toPx())
-            drawLine(gold, Offset(x + half, middle), Offset(x, size.height), 1.dp.toPx())
-            drawLine(gold, Offset(x, size.height), Offset(x - half, middle), 1.dp.toPx())
+            drawLine(line, Offset(x - half, middle), Offset(x, 0f), 1.dp.toPx())
+            drawLine(line, Offset(x, 0f), Offset(x + half, middle), 1.dp.toPx())
+            drawLine(line, Offset(x + half, middle), Offset(x, size.height), 1.dp.toPx())
+            drawLine(line, Offset(x, size.height), Offset(x - half, middle), 1.dp.toPx())
             x += step
         }
     }
@@ -240,8 +240,9 @@ private fun SaudiTrim(modifier: Modifier) {
 
 @Composable
 private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(8.dp))
-        .border(1.dp, accent(day).copy(alpha = .28f), RoundedCornerShape(8.dp))
+    Box(Modifier.clip(RoundedCornerShape(12.dp))
+        .background(ink(day).copy(alpha = .10f))
+        .border(1.dp, ink(day).copy(alpha = .12f), RoundedCornerShape(12.dp))
         .clickable(onClick = onClick)
         .widthIn(min = 72.dp).heightIn(min = 48.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
         Text(label, color = ink(day), fontSize = 14.sp)
@@ -249,44 +250,72 @@ private fun HeaderAction(label: String, day: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun HomePage(day: Boolean, apps: List<LaunchableApp>) {
+fun HomePage(apps: List<LaunchableApp>) {
     val context = LocalContext.current
+    val interconnection = remember(context, apps) {
+        OemSettings.interconnectionIntent().takeIf {
+            it.resolveActivity(context.packageManager) != null
+        }
+    }
     val shortcuts = listOf(
-        Triple("يوتيوب", AppIndex.find(apps, "app.revanced.android.youtube", "com.google.android.youtube"), null),
-        Triple("ويز", AppIndex.find(apps, "com.waze"), null),
-        Triple("البلوتوث", AppIndex.find(apps, "com.autolink.bluetooth"), android.provider.Settings.ACTION_BLUETOOTH_SETTINGS),
-        Triple("الواي فاي", null, android.provider.Settings.ACTION_WIFI_SETTINGS),
-        Triple("التكييف", AppIndex.find(apps, "com.autolink.aircontroller"), null)
+        HomeShortcut("Apple CarPlay", ShortcutArt.CarPlay, AppIndex.find(apps, "com.autolink.carplaylink")),
+        HomeShortcut("يوتيوب", ShortcutArt.Video, AppIndex.find(apps, "app.revanced.android.youtube", "com.google.android.youtube")),
+        HomeShortcut("ويز", ShortcutArt.Map, AppIndex.find(apps, "com.waze")),
+        HomeShortcut("البلوتوث", ShortcutArt.Bluetooth, AppIndex.find(apps, "com.autolink.bluetooth"),
+            android.provider.Settings.ACTION_BLUETOOTH_SETTINGS),
+        HomeShortcut("الواي فاي", ShortcutArt.Wifi, settings = android.provider.Settings.ACTION_WIFI_SETTINGS),
+        HomeShortcut("التكييف", ShortcutArt.Climate, AppIndex.find(apps, "com.autolink.aircontroller"))
     )
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cardWidth = (maxWidth * .22f).coerceIn(130.dp, 280.dp)
-        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            shortcuts.forEachIndexed { index, (label, app, settings) ->
-                Column(Modifier.width(cardWidth).height(120.dp).clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xA6202226)).clickable(enabled = app != null || settings != null) {
-                        runCatching {
-                            val intent = app?.let { android.content.Intent.makeMainActivity(it.component) }
-                                ?: android.content.Intent(requireNotNull(settings))
-                            LauncherDisplay.start(context, intent)
-                        }.onFailure {
-                            android.widget.Toast.makeText(context, "تعذر فتح $label", android.widget.Toast.LENGTH_SHORT).show()
+        val cardWidth = (maxWidth * .29f).coerceIn(204.dp, 360.dp).coerceAtMost(maxWidth)
+        val cardHeight = (maxHeight * .26f).coerceIn(116.dp, 172.dp).coerceAtMost(maxHeight)
+        LazyRow(Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(shortcuts, key = { it.art.name }) { shortcut ->
+                val intent = shortcut.app?.let { android.content.Intent.makeMainActivity(it.component) }
+                    ?: shortcut.settings?.let { android.content.Intent(it) }
+                    ?: if (shortcut.art == ShortcutArt.CarPlay) interconnection else null
+                Box(Modifier.size(cardWidth, cardHeight).clip(CardShape)
+                    .background(Brush.linearGradient(listOf(Color(0xFF121619), Color(0xFF20282D))))
+                    .border(1.dp, Brush.linearGradient(listOf(shortcut.art.tint.copy(alpha = .5f),
+                        Color.White.copy(alpha = .12f))), CardShape)
+                    .clickable(enabled = intent != null, role = androidx.compose.ui.semantics.Role.Button) {
+                        runCatching { LauncherDisplay.start(context, requireNotNull(intent)) }.onFailure {
+                            android.widget.Toast.makeText(context, "تعذر فتح ${shortcut.label}", android.widget.Toast.LENGTH_SHORT).show()
                         }
-                    }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center) {
-                    ShortcutArtwork(index)
-                    Text(label, color = Color.White, fontSize = 19.sp)
-                    if (app == null && settings == null) Text("غير مثبت", color = Color.LightGray, fontSize = 12.sp)
+                    }) {
+                    ShortcutArtwork(shortcut.art, Modifier.align(Alignment.CenterEnd)
+                        .fillMaxWidth(.56f).fillMaxHeight())
+                    Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(.55f)
+                        .padding(start = 16.dp, end = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(shortcut.label, color = Color.White, fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val subtitle = when {
+                            intent == null -> "غير متاح"
+                            shortcut.art == ShortcutArt.CarPlay && shortcut.app == null -> "ربط الهاتف"
+                            else -> null
+                        }
+                        if (subtitle != null) Text(subtitle, color = Color(0xFFCDD5DA), fontSize = 13.sp)
+                    }
                 }
             }
         }
     }
 }
 
+private data class HomeShortcut(
+    val label: String,
+    val art: ShortcutArt,
+    val app: LaunchableApp? = null,
+    val settings: String? = null
+)
+
 @Composable
 private fun HomeQuickTile(icon: String, label: String, day: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.heightIn(min = 90.dp).clip(RoundedCornerShape(8.dp))
-        .background(surface(day)).border(1.dp, accent(day).copy(alpha = .2f), RoundedCornerShape(8.dp))
+        .t1Bg(surface(day)).border(1.dp, accent(day).copy(alpha = .2f), RoundedCornerShape(8.dp))
         .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.SpaceBetween) {
         DashboardNavIcon(when (icon) {
@@ -304,7 +333,7 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onTheme: (Boolean) -> Unit,
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.fillMaxWidth().height(stageHeight).clip(RoundedCornerShape(4.dp))
-            .background(Brush.verticalGradient(if (day)
+            .t1Bg(Brush.verticalGradient(if (day)
                 listOf(Color(0xFFD8DED7), Color(0xFFAEBEB4), Color(0xFF849D8E))
                 else listOf(Color(0xFF263731), Color(0xFF35423C), Color(0xFF101A16))))) {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -314,23 +343,23 @@ fun ControlsPage(day: Boolean, snap: CarBridge.Snap, onTheme: (Boolean) -> Unit,
                         contentDescription = "جيتور T1", modifier = Modifier.fillMaxSize().padding(6.dp),
                         contentScale = ContentScale.Fit)
                     Column(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
-                        Text("JETOUR T1", color = accent(day), fontSize = 14.sp, letterSpacing = 2.sp)
-                        Text("التحكم بالمركبة", color = ink(day), fontSize = 25.sp)
+                        Text("JETOUR T1", color = cAccent(day), fontSize = 14.sp, letterSpacing = 2.sp)
+                        Text("التحكم بالمركبة", color = cInk(day), fontSize = 25.sp)
                     }
                 }
                 Column(Modifier.width(225.dp).fillMaxHeight().padding(end = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center) {
                     TailgateGauge(day, snap.reading("tailgate_height").current)
-                    Text("ارتفاع الباب الخلفي الكهربائي", color = ink(day), fontSize = 14.sp,
+                    Text("ارتفاع الباب الخلفي الكهربائي", color = cInk(day), fontSize = 14.sp,
                         textAlign = TextAlign.Center)
-                    Text("قراءة مباشرة عند الاتصال", color = muted(day), fontSize = 11.sp)
+                    Text("قراءة مباشرة عند الاتصال", color = cMuted(day), fontSize = 11.sp)
                     Spacer(Modifier.height(12.dp))
                     ActionButton("النوافذ بالتفصيل", day, onClick = onWindows)
                 }
             }
             }
-            SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
+            SaudiTrim(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), cInk(day))
         }
         VehicleControlPanel(day, snap)
         OemControlTiles(day, onTheme, onClassic)
@@ -363,7 +392,7 @@ private fun OemControlTiles(day: Boolean, onTheme: (Boolean) -> Unit, onClassic:
         controls.chunked(5).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (label, action) ->
-                    OutlinedButton(modifier = Modifier.weight(1f).heightIn(min = 72.dp), onClick = {
+                    T1OutlinedButton(modifier = Modifier.weight(1f).heightIn(min = 72.dp), onClick = {
                         runCatching {
                             when (action) {
                                 "cluster" -> onClassic()
@@ -379,8 +408,8 @@ private fun OemControlTiles(day: Boolean, onTheme: (Boolean) -> Unit, onClassic:
                         }
                     }) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(label, color = ink(day), textAlign = TextAlign.Center)
-                            if (action.isEmpty()) Text("إعدادات جيتور", color = muted(day), fontSize = 11.sp)
+                            Text(label, color = cInk(day), textAlign = TextAlign.Center)
+                            if (action.isEmpty()) Text("إعدادات جيتور", color = cMuted(day), fontSize = 11.sp)
                         }
                     }
                 }
@@ -392,24 +421,26 @@ private fun OemControlTiles(day: Boolean, onTheme: (Boolean) -> Unit, onClassic:
 
 @Composable
 internal fun TailgateGauge(day: Boolean, value: Double?) {
-    val gold = accent(day)
+    val gold = cAccent(day)
+    val arcTrack = cInk(day).copy(alpha = .28f)
     Box(Modifier.size(165.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val width = 7.dp.toPx()
             val inset = 12.dp.toPx()
             val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
             val top = Offset(inset, inset)
-            drawArc(ink(day).copy(alpha = .28f), 145f, 250f, false, top, arcSize,
+            drawArc(arcTrack, 145f, 250f, false, top, arcSize,
                 style = Stroke(width, cap = StrokeCap.Round))
             value?.let { drawArc(gold, 145f, (it / 100.0).coerceIn(0.0, 1.0).toFloat() * 250f,
                 false, top, arcSize, style = Stroke(width, cap = StrokeCap.Round)) }
         }
-        Text(value?.let { "${it.toInt()}%" } ?: "—", color = ink(day), fontSize = 38.sp,
+        Text(value?.let { "${it.toInt()}%" } ?: "—", color = cInk(day), fontSize = 38.sp,
             fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Light)
     }
 }
 
-private fun panel(modifier: Modifier, day: Boolean) = modifier.clip(CardShape).background(surface(day))
+@Composable
+private fun panel(modifier: Modifier, day: Boolean) = modifier.clip(CardShape).t1Bg(surface(day))
     .border(1.dp, if (day) T1Colors.dayLine else T1Colors.nightLine, CardShape)
 
 @Composable
@@ -427,8 +458,8 @@ private fun MainMetrics(day: Boolean, snap: CarBridge.Snap, modifier: Modifier) 
 
 @Composable
 private fun SpeedPanel(day: Boolean, snap: CarBridge.Snap, modifier: Modifier) {
-    val tone = accent(day)
-    Box(panel(modifier, day).background(Brush.radialGradient(listOf(if (day) Color(0xFFEAE3D3) else Color(0xFF1D4733), surface(day))))) {
+    val tone = cAccent(day)
+    Box(panel(modifier, day).t1Bg(Brush.radialGradient(listOf(if (day) Color(0xFFEAE3D3) else Color(0xFF1D4733), surface(day))))) {
         Canvas(Modifier.fillMaxSize().padding(horizontal = 42.dp, vertical = 30.dp)) {
             val diameter = minOf(size.width, size.height * 1.22f)
             val origin = Offset((size.width - diameter) / 2, 8f)
@@ -437,15 +468,15 @@ private fun SpeedPanel(day: Boolean, snap: CarBridge.Snap, modifier: Modifier) {
                 origin, Size(diameter, diameter), style = Stroke(6.dp.toPx(), cap = StrokeCap.Round))
         }
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("السرعة", color = muted(day), fontSize = 13.sp)
-            Text(snap.speed?.toInt()?.toString() ?: "—", color = ink(day), fontSize = 78.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Light)
+            Text("السرعة", color = cMuted(day), fontSize = 13.sp)
+            Text(snap.speed?.toInt()?.toString() ?: "—", color = cInk(day), fontSize = 78.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Light)
             Text(snap.speedUnit, color = tone, fontSize = 13.sp)
-            Text(snap.reading(snap.speedKey).status.label, color = muted(day), fontSize = 11.sp)
+            Text(snap.reading(snap.speedKey).status.label, color = cMuted(day), fontSize = 11.sp)
         }
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 listOf(1 to "P", 2 to "R", 3 to "N", 4 to "D").forEach { (gear, label) ->
-                    Text(label, color = if (snap.gear == gear) tone else muted(day).copy(alpha = .6f),
+                    Text(label, color = if (snap.gear == gear) tone else cMuted(day).copy(alpha = .6f),
                         fontSize = 19.sp, fontFamily = FontFamily.SansSerif, fontWeight = if (snap.gear == gear) FontWeight.Bold else FontWeight.Normal)
                 }
             }
@@ -455,16 +486,16 @@ private fun SpeedPanel(day: Boolean, snap: CarBridge.Snap, modifier: Modifier) {
 
 @Composable
 private fun LightPill(label: String, reading: SignalReading, day: Boolean) {
-    val color = when (reading.current) { 1.0 -> if (day) Color(0xFF246B4E) else Mint; else -> muted(day) }
+    val color = when (reading.current) { 1.0 -> if (day) Color(0xFF246B4E) else Mint; else -> cMuted(day) }
     Text("$label · ${when (reading.current) { 1.0 -> "مضاء"; 0.0 -> "مطفأ"; else -> "—" }}", color = color, fontSize = 12.sp,
-        modifier = Modifier.background(surface(day), RoundedCornerShape(30.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
+        modifier = Modifier.t1Bg(surface(day), RoundedCornerShape(30.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
 }
 
 @Composable
 private fun Shortcut(title: String, subtitle: String, day: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Column(panel(modifier, day).clickable(onClick = onClick).heightIn(min = 88.dp).padding(16.dp)) {
-        Text(title, color = ink(day), fontSize = 17.sp)
-        Text(subtitle, color = muted(day), fontSize = 12.sp, maxLines = 2)
+        Text(title, color = cInk(day), fontSize = 17.sp)
+        Text(subtitle, color = cMuted(day), fontSize = 12.sp, maxLines = 2)
     }
 }
 
@@ -473,8 +504,8 @@ internal fun AppArtwork(app: LaunchableApp) {
     val context = LocalContext.current
     val icon = remember(app.component) { runCatching { context.packageManager.getActivityIcon(app.component).toBitmap(72, 72).asImageBitmap() }.getOrNull() }
     if (icon != null) Image(icon, app.label, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
-    else Box(Modifier.size(48.dp).background(Color(0xFF31513E), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-        Text(app.label.take(1), color = Sand)
+    else Box(Modifier.size(48.dp).t1Bg(Color(0xFF31513E), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+        Text(app.label.take(1), color = t1OnButton() ?: Sand)
     }
 }
 
@@ -487,8 +518,8 @@ private fun MediaStrip(day: Boolean) {
     Row(panel(Modifier.fillMaxWidth(), day).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
-            Text("الوسائط", color = accent(day), fontSize = 11.sp)
-            Text(state.title ?: "لا يوجد مقطع نشط", color = ink(day), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("الوسائط", color = cAccent(day), fontSize = 11.sp)
+            Text(state.title ?: "لا يوجد مقطع نشط", color = cInk(day), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         ActionButton(if (media.allowed()) (if (state.playing) "إيقاف مؤقت" else "تشغيل") else "تفعيل التحكم", day) {
             if (media.allowed()) media.toggle() else AppIndex.openListenerSettings(context)
@@ -550,9 +581,9 @@ fun VehiclePage(day: Boolean, snap: CarBridge.Snap, bridge: CarBridge) {
                     val definition = property.definition()
                     if (definition != null) ReadingCard(definition, snap.reading(definition.key), snap.nowMs, day)
                     else Column(panel(Modifier.fillMaxWidth(), day).padding(16.dp)) {
-                        Text(property.name, color = ink(day), fontSize = 12.sp, maxLines = 3)
-                        Text("${property.address} · ${property.type} · ${property.area}", color = muted(day), fontSize = 11.sp)
-                        Text("معلومة في الفهرس · لا تُقرأ بهذا المسار", color = accent(day), fontSize = 12.sp)
+                        Text(property.name, color = cInk(day), fontSize = 12.sp, maxLines = 3)
+                        Text("${property.address} · ${property.type} · ${property.area}", color = cMuted(day), fontSize = 11.sp)
+                        Text("معلومة في الفهرس · لا تُقرأ بهذا المسار", color = cAccent(day), fontSize = 12.sp)
                     }
                 }
             }
@@ -586,14 +617,14 @@ private fun ReadingCard(definition: SignalDefinition, reading: SignalReading, no
     var details by remember { mutableStateOf(false) }
     val live = reading.status == ReadingStatus.LIVE
     Column(panel(modifier, day).clickable { details = true }.heightIn(min = 130.dp).padding(16.dp)) {
-        Text(definition.label, color = muted(day), fontSize = if (definition.group == SignalGroup.RAW) 12.sp else 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(definition.label, color = cMuted(day), fontSize = if (definition.group == SignalGroup.RAW) 12.sp else 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-            Text(definition.format(reading.current), color = ink(day), fontSize = 29.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
-            Text(definition.unit, color = muted(day), fontSize = 11.sp, modifier = Modifier.padding(bottom = 6.dp))
+            Text(definition.format(reading.current), color = cInk(day), fontSize = 29.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
+            Text(definition.unit, color = cMuted(day), fontSize = 11.sp, modifier = Modifier.padding(bottom = 6.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(Modifier.size(5.dp).background(if (live) (if (day) Color(0xFF276E53) else Mint) else muted(day), CircleShape))
-            Text(reading.status.label, color = if (live) (if (day) Color(0xFF276E53) else Mint) else muted(day), fontSize = 11.sp)
+            Box(Modifier.size(5.dp).background(if (live) (if (day) Color(0xFF276E53) else Mint) else cMuted(day), CircleShape))
+            Text(reading.status.label, color = if (live) (if (day) Color(0xFF276E53) else Mint) else cMuted(day), fontSize = 11.sp)
         }
     }
     if (details) AlertDialog(onDismissRequest = { details = false }, title = { Text(definition.label) },
@@ -611,16 +642,18 @@ private fun ReadingCard(definition: SignalDefinition, reading: SignalReading, no
 
 @Composable
 private fun Choice(label: String, selected: Boolean, day: Boolean, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(12.dp)).background(if (selected) accent(day).copy(alpha = if (day) .14f else .16f) else surface(day))
+    Box(Modifier.clip(RoundedCornerShape(12.dp)).t1Bg(if (selected) accent(day).copy(alpha = if (day) .14f else .16f) else surface(day))
+        .t1Selected(selected, RoundedCornerShape(12.dp))
         .clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = if (selected) accent(day) else muted(day), fontSize = 13.sp)
+        Text(label, color = if (selected) t1SelText(day) else cMuted(day), fontSize = 13.sp)
     }
 }
 
 @Composable
 private fun ActionButton(label: String, day: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, if (day) T1Colors.dayLine else T1Colors.nightLine, RoundedCornerShape(12.dp))
+    Box(Modifier.clip(RoundedCornerShape(12.dp)).t1Bg(surface(day))
+        .border(1.dp, if (day) T1Colors.dayLine else T1Colors.nightLine, RoundedCornerShape(12.dp))
         .clickable(enabled = enabled, onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = accent(day).copy(alpha = if (enabled) 1f else .4f), fontSize = 13.sp, maxLines = 2, textAlign = TextAlign.Center)
+        Text(label, color = cAccent(day).copy(alpha = if (enabled) 1f else .4f), fontSize = 13.sp, maxLines = 2, textAlign = TextAlign.Center)
     }
 }

@@ -17,9 +17,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +38,7 @@ class T1App : android.app.Application() {
         car.start()
         // NaviStart-style startup: floating/multi buttons, hide recovery square.
         JctStartup.onProcess(this)
-        // Phone remote: starts only if "التحكم من الجوال" was turned on.
+        // Phone remote ("التحكم من الجوال"): always on since 1.15.8.
         RemoteHost.onProcess(this)
     }
 }
@@ -87,7 +84,19 @@ class MainActivity : ComponentActivity() {
         snap = car.snap
         car.onChange = carListener
         car.onSpeedClose = { Toast.makeText(this, "أغلق نظام السيارة كاميرا ٣٦٠", Toast.LENGTH_SHORT).show() }
+        getSharedPreferences("t1", MODE_PRIVATE).registerOnSharedPreferenceChangeListener(prefsListener)
         refreshEdge()
+    }
+
+    /** Settings changed from the phone remote show up without reopening T1. */
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        val prefs = (application as T1App).prefs
+        when (key) {
+            "day" -> day = prefs.day
+            "destCluster" -> toCluster = prefs.destinationCluster
+            "pinnedApps" -> pinnedApps = prefs.pinnedApps
+            "recentApps" -> recentApps = prefs.recentApps
+        }
     }
 
     override fun onResume() {
@@ -131,10 +140,22 @@ class MainActivity : ComponentActivity() {
             if (page != Page.Home || showWindows) goBack()
             return
         }
-        val target = when (intent?.getStringExtra(EXTRA_PAGE)) {
+        val extra = intent?.getStringExtra(EXTRA_PAGE)
+        when (extra) {
+            // Phone remote (T1 Remote 1.3.0): open any launcher page on the car screen.
+            "camera" -> { intent?.removeExtra(EXTRA_PAGE); openCamera(); return }
+            "windows" -> { intent?.removeExtra(EXTRA_PAGE); quick("windows"); return }
+            "permissions" -> { intent?.removeExtra(EXTRA_PAGE); showPermissionSetup = true; return }
+        }
+        val target = when (extra) {
             "home" -> Page.Home
             "apps" -> Page.Apps
             "cluster" -> Page.Cluster
+            "vehicle" -> Page.Vehicle
+            "controls" -> Page.Controls
+            "climate" -> Page.Climate
+            "customize" -> Page.Customize
+            "settings" -> Page.Settings
             else -> return
         }
         navigate(target)
@@ -142,6 +163,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        getSharedPreferences("t1", MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(prefsListener)
         val car = (application as T1App).car
         if (car.onChange === carListener) {
             car.onChange = null
@@ -177,7 +199,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!ensureMainDisplay()) return
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.isStatusBarContrastEnforced = false
         val app = application as T1App
         day = app.prefs.day
         toCluster = app.prefs.destinationCluster
@@ -213,7 +237,7 @@ class MainActivity : ComponentActivity() {
                             Page.Home -> if (showWindows) {
                                 WindowsPage(day) { showWindows = false }
                             } else {
-                                HomePage(day, availableApps)
+                                HomePage(availableApps)
                             }
                             Page.Apps -> AppsPage(
                                 day, toCluster, availableApps,
@@ -230,6 +254,7 @@ class MainActivity : ComponentActivity() {
                             Page.Controls -> ControlsPage(day, snap, { day = it; app.prefs.day = it }, { classic() }) {
                                 quick("windows")
                             }
+                            Page.Climate -> ClimatePage(day, snap)
                             Page.Customize -> SimplePage(
                                 "التخصيص",
                                 "القالب الكلاسيكي هو الافتراضي. الإضافات S1–S10 مطفأة حتى تفعّلها، ولا تغطي مؤشرات الأمان.\nثيم مقروء: ${snap.theme ?: "--"}  الخط: ${snap.font ?: "--"}",

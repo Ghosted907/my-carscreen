@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicReference
  *  close           -> ClusterForceClose.close (existing guarded close)
  *  resize          -> HomeAppWindows.dock / fullscreen (existing freeform dock; only when freeform is on)
  *  vehicle         -> VehicleControl.send(id) with VehicleCommands ids (existing 9 approved commands)
+ *  climate         -> Climate.send (A/C, owner-approved 2026-11-15; same VehicleService the OEM A/C app uses)
+ *  everything else -> RemoteParity (launcher buttons and settings; no other vehicle writes)
  */
 class RemoteActions(private val context: Context) {
     data class Out(val ok: Boolean, val msg: String, val data: JSONObject? = null)
@@ -34,14 +36,34 @@ class RemoteActions(private val context: Context) {
     private val vehicle by lazy { VehicleControl(context) }
     private var vehicleUsed = false
     private val art = RemoteArt(context)
+    private val more = RemoteParity(context, art)
 
     fun run(body: JSONObject): Out = when (body.getString("op")) {
-        RemoteProtocol.OP_PING -> Out(true, "متصل", JSONObject()
+        RemoteProtocol.OP_PING -> Out(true, "متصل", more.ping()
             .put("vehicle", RemoteStore.vehicleAllowed(context))
             .put("freeform", HomeAppWindows.freeformEnabled(context))
             .put("cluster", clusterIndex() >= 0)
             .put("art", true)
             .put("close", ClusterForceClose.ENABLED))
+        // Protocol rev 3 (T1 Remote 1.3.0): the rest of the launcher screen. See RemoteParity.
+        RemoteProtocol.OP_SHORTCUT -> more.shortcut(body.getString("id"))
+        RemoteProtocol.OP_PAGE -> more.page(body.getString("page"))
+        RemoteProtocol.OP_OEM -> more.oem(body.getString("target"))
+        RemoteProtocol.OP_CLUSTER -> more.cluster(body.getString("action"), body.optInt("value", 0))
+        RemoteProtocol.OP_RUN -> more.run(body.getString("id"))
+        RemoteProtocol.OP_ACTIONS -> more.actions()
+        RemoteProtocol.OP_DATA -> more.data()
+        RemoteProtocol.OP_CLIMATE -> more.climate(body.getString("item"), body.getDouble("value"))
+        RemoteProtocol.OP_CLIMATE_STATE -> more.climateState()
+        RemoteProtocol.OP_SETTINGS -> more.settings()
+        RemoteProtocol.OP_SET -> more.set(body.getString("key"), body.get("value"))
+        RemoteProtocol.OP_PIN -> more.pin(body.getString("pkg"), body.getBoolean("on"))
+        RemoteProtocol.OP_BOARD -> more.board()
+        RemoteProtocol.OP_BOARD_SET -> more.boardSet(body)
+        RemoteProtocol.OP_BOARD_APPLY -> more.boardApply()
+        RemoteProtocol.OP_ASSET -> more.asset(body.getString("name"))
+        RemoteProtocol.OP_PROBE -> more.probe()
+        RemoteProtocol.OP_WALLPAPER -> more.wallpaper(body)
         RemoteProtocol.OP_APPS -> apps()
         RemoteProtocol.OP_TASKS -> tasks()
         RemoteProtocol.OP_OPEN, RemoteProtocol.OP_MOVE -> open(body.getString("pkg"), body.getString("screen"))
@@ -66,11 +88,16 @@ class RemoteActions(private val context: Context) {
 
     private fun apps(): Out {
         val list = JSONArray()
+        val prefs = T1Prefs(context)
+        val pinned = prefs.pinnedApps
+        val recent = prefs.recentApps
         AppIndex.launchable(context).filter { ClusterMovePolicy.mayMoveToMain(it.packageName, context.packageName) }
             .distinctBy { it.packageName }.forEach { app ->
-                list.put(JSONObject().put("pkg", app.packageName).put("label", app.label).put("icon", icon(app.packageName)))
+                list.put(JSONObject().put("pkg", app.packageName).put("label", app.label).put("icon", icon(app.packageName))
+                    .put("pinned", app.packageName in pinned).put("recent", recent.indexOf(app.packageName)))
             }
-        return Out(true, "${list.length()} تطبيق", JSONObject().put("apps", list))
+        return Out(true, "${list.length()} تطبيق", JSONObject().put("apps", list)
+            .put("dest_cluster", prefs.destinationCluster).put("pinned_max", 10))
     }
 
     /** Small PNG icon, base64. Empty when it cannot be drawn. */
@@ -164,5 +191,5 @@ class RemoteActions(private val context: Context) {
         return r.get()
     }
 
-    fun close() { art.clear(); if (vehicleUsed) vehicle.close() }
+    fun close() { art.clear(); more.close(); if (vehicleUsed) vehicle.close() }
 }

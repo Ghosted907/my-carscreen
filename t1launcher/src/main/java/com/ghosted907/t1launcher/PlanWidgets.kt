@@ -39,10 +39,10 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val Gold = T1Colors.gold
-private fun tone(day: Boolean) = if (day) T1Colors.dayText else T1Colors.nightText
-private fun tile(day: Boolean) = if (day) T1Colors.dayCard else T1Colors.nightCard
-private fun detailGold(day: Boolean) = if (day) Color(0xFF8A6828) else Gold
+private val Gold = T1Colors.nightText // 1.15.7: no gold; settings-button text colour
+@Composable private fun tone(day: Boolean) = t1CardText(day) // 1.15.11: card text
+private fun tile(day: Boolean) = T1Colors.fill(if (day) T1Colors.dayCard else T1Colors.nightCard) // 1.15.8: 80%
+@Composable private fun detailGold(day: Boolean) = t1CardText(day)
 private fun fmt(v: Double?, digits: Int = 0): String = v?.let { String.format(Locale.US, "%.${digits}f", it) } ?: "—"
 
 @Composable
@@ -65,13 +65,13 @@ fun MediaLaunchPanel(day: Boolean) {
     val context = LocalContext.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         listOf("Waze · ويز" to "com.waze", "YouTube · يوتيوب" to "app.revanced.android.youtube").forEach { (name, pkg) ->
-            Column(Modifier.weight(1f).height(160.dp).background(tile(day), RoundedCornerShape(20.dp)).clickable {
+            Column(Modifier.weight(1f).height(160.dp).t1Bg(tile(day), RoundedCornerShape(20.dp)).clickable {
                 if (!JctLaunch.startOnDisplayIndex(context, pkg, JctLaunch.guIndex(context)))
                     Toast.makeText(context, "تعذر فتح $name", Toast.LENGTH_SHORT).show()
             }.padding(22.dp), verticalArrangement = Arrangement.Center) {
-                Text(if (pkg == "com.waze") "◇" else "▷", color = Gold, fontSize = 35.sp)
+                Text(if (pkg == "com.waze") "◇" else "▷", color = detailGold(day), fontSize = 35.sp)
                 Text(name, color = tone(day), fontSize = 24.sp)
-                Text("فتح على الشاشة الرئيسية", color = Gold, fontSize = 12.sp)
+                Text("فتح على الشاشة الرئيسية", color = detailGold(day), fontSize = 12.sp)
             }
         }
     }
@@ -82,7 +82,7 @@ fun CompactReadings(day: Boolean, snap: CarBridge.Snap, basics: Boolean = false)
     val keys = if (basics) listOf("drive_mode", "gear", "fuel", "range", "outside_oem", "odometer")
         else listOf(snap.speedKey, "fuel", "range", "drive_mode", "rpm")
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-        .clip(RoundedCornerShape(14.dp)).background(tile(day))
+        .clip(RoundedCornerShape(14.dp)).t1Bg(tile(day))
         .border(1.dp, if (day) T1Colors.dayLine else T1Colors.nightLine, RoundedCornerShape(14.dp))
         .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -91,7 +91,7 @@ fun CompactReadings(day: Boolean, snap: CarBridge.Snap, basics: Boolean = false)
             val reading = snap.reading(key)
             Column(Modifier.widthIn(min = 112.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Box(Modifier.width(28.dp).height(2.dp).background(detailGold(day)))
-                Text(definition.label.removeSuffix(" · مرشح"), color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 11.sp)
+                Text(definition.label.removeSuffix(" · مرشح"), color = t1CardMuted(day), fontSize = 11.sp)
                 Text("${definition.format(reading.current)} ${definition.unit}", color = tone(day), fontSize = 18.sp, maxLines = 1)
                 if (reading.current == null) Text(reading.status.label, color = detailGold(day), fontSize = 10.sp)
             }
@@ -102,11 +102,11 @@ fun CompactReadings(day: Boolean, snap: CarBridge.Snap, basics: Boolean = false)
 @Composable
 fun OemSettingsCard(day: Boolean) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().background(tile(day), RoundedCornerShape(18.dp)).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().t1Bg(tile(day), RoundedCornerShape(18.dp)).padding(12.dp)) {
         Text("▣  الإعدادات", fontSize = 22.sp, color = tone(day), modifier = Modifier.clickable { OemSettings.open(context) }.padding(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             listOf("◎ الدركسون" to "steering", "◒ المرايات" to "mirrors", "▱ الأبواب والنوافذ" to "windows").forEach { (label, id) ->
-                OutlinedButton(onClick = { OemSettings.open(context, id) }, modifier = Modifier.weight(1f)) { Text(label) }
+                T1OutlinedButton(onClick = { OemSettings.open(context, id) }, modifier = Modifier.weight(1f)) { Text(label) }
             }
         }
     }
@@ -118,7 +118,7 @@ fun VehicleControlPanel(day: Boolean, snap: CarBridge.Snap) {
     val control = remember { VehicleControl(context) }
     var status by remember { mutableStateOf("اختر أمراً للتحكم في المركبة") }
     DisposableEffect(control) { onDispose { control.close() } }
-    Column(Modifier.fillMaxWidth().background(tile(day), RoundedCornerShape(10.dp)).padding(16.dp),
+    Column(Modifier.fillMaxWidth().t1Bg(tile(day), RoundedCornerShape(10.dp)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val groups = listOf(
             "التحكم في النوافذ" to listOf("التهوية" to "windows_vent", "مغلق" to "windows_close", "مفتوح" to "windows_open"),
@@ -144,13 +144,13 @@ fun VehicleControlPanel(day: Boolean, snap: CarBridge.Snap) {
                 }
             }
         }
-        OutlinedButton(onClick = { OemSettings.open(context, "tailgate") },
+        T1OutlinedButton(onClick = { OemSettings.open(context, "tailgate") },
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
             Text("فتح الشنطة · شاشة جيتور الأصلية")
         }
         Text("يفتح زر المصنع الخاص بالشنطة؛ عملية الفتح تتم من شاشة جيتور.",
-            color = Gold, fontSize = 12.sp)
-        TextButton(onClick = { control.probe { status = it } }) { Text("فحص الاتصال للقراءة فقط") }
+            color = detailGold(day), fontSize = 12.sp)
+        T1OutlinedButton(onClick = { control.probe { status = it } }) { Text("فحص الاتصال للقراءة فقط") }
         Text(status, color = tone(day), fontSize = 12.sp)
     }
 }
@@ -161,7 +161,7 @@ private fun SegmentedVehicleControl(title: String, commands: List<Pair<String, S
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, color = tone(day), fontSize = 18.sp, maxLines = 1)
         Row(Modifier.fillMaxWidth().height(66.dp).clip(RoundedCornerShape(7.dp))
-            .background(if (day) Color(0xFFE4E7DE) else Color(0xFF292D2C)),
+            .t1Bg(T1Colors.fill(if (day) Color(0xFFE4E7DE) else Color(0xFF292D2C))), // 1.15.11: Home button fill on secondary pages
             verticalAlignment = Alignment.CenterVertically) {
             commands.forEachIndexed { index, (label, id) ->
                 Box(Modifier.weight(1f).fillMaxHeight().clickable { onCommand(id) },
@@ -195,7 +195,7 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
     val mode = SignalCatalog.byKey.getValue("drive_mode").format(snap.reading("drive_mode").current)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(Brush.verticalGradient(if (day)
+            .t1Bg(Brush.verticalGradient(if (day)
                 listOf(Color(0xFFE8E9DF), Color(0xFFCED8CA))
                 else listOf(Color(0xFF1B2A26), Color(0xFF09120F))))
             .border(1.dp, gold.copy(alpha = .28f), RoundedCornerShape(12.dp))
@@ -203,7 +203,7 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("المركبة  ·  JETOUR T1", color = tone(day), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-                    Text("ضغط الإطارات وحرارتها  /  مؤشرات الطرق الوعرة", color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 13.sp)
+                    Text("ضغط الإطارات وحرارتها  /  مؤشرات الطرق الوعرة", color = t1CardMuted(day), fontSize = 13.sp)
                 }
                 Text("$mode  ◇", color = gold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 18.dp))
                 TextButton(onClick = { permission.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) {
@@ -214,8 +214,10 @@ fun VehicleOverview(day: Boolean, snap: CarBridge.Snap) {
                 horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 CompassDial(day, heading, compact, Modifier.weight(.23f).fillMaxHeight())
                 Box(Modifier.weight(.40f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    // 1.15.12: on secondary pages the platform uses the sidebar accent colour.
+                    val platformBase = if (LocalHomePage.current) Color(0xFF456B3F) else T1Colors.railSelText(day)
                     Canvas(Modifier.fillMaxSize()) {
-                        val platform = Color(0xFF456B3F).copy(alpha = if (day) .32f else .43f)
+                        val platform = platformBase.copy(alpha = if (day) .32f else .43f)
                         drawOval(platform, topLeft = Offset(size.width * .08f, size.height * .61f),
                             size = androidx.compose.ui.geometry.Size(size.width * .84f, size.height * .33f))
                         drawOval(gold.copy(alpha = .46f), topLeft = Offset(size.width * .08f, size.height * .61f),
@@ -267,7 +269,7 @@ internal fun TireReadout(label: String, suffix: String, snap: CarBridge.Snap, da
     val align = if (nearCarOnLeft) TextAlign.Left else TextAlign.Right
     Column(modifier.fillMaxWidth().padding(horizontal = if (condensed) 3.dp else 8.dp),
         verticalArrangement = Arrangement.SpaceEvenly) {
-        Text(label, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted,
+        Text(label, color = t1CardMuted(day),
             fontSize = if (condensed) 10.sp else 12.sp, textAlign = align, modifier = Modifier.fillMaxWidth())
         Text("${fmt(pressure, 1)} psi", color = tone(day), fontSize = if (condensed) 16.sp else 24.sp,
             fontWeight = FontWeight.Medium, maxLines = 1, textAlign = align,
@@ -309,7 +311,7 @@ internal fun CompassDial(day: Boolean, heading: Double?, compact: Boolean, modif
                 fontSize = if (condensed) 15.sp else 22.sp)
             Text("${fmt(heading)}°", color = foreground,
                 fontSize = if (condensed) 23.sp else 44.sp, fontWeight = FontWeight.Light)
-            if (!condensed) Text("اتجاه المركبة", color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 12.sp)
+            if (!condensed) Text("اتجاه المركبة", color = t1CardMuted(day), fontSize = 12.sp)
         }
     }
 }
@@ -317,10 +319,10 @@ internal fun CompassDial(day: Boolean, heading: Double?, compact: Boolean, modif
 @Composable
 private fun VehicleMetric(label: String, value: String, day: Boolean) {
     Column(Modifier.widthIn(min = 140.dp).clip(RoundedCornerShape(10.dp))
-        .background(if (day) Color(0xFFEEEAD9) else Color(0xFF0C291F))
+        .t1Bg(T1Colors.fill(if (day) Color(0xFFEEEAD9) else Color(0xFF0C291F)))
         .padding(horizontal = 13.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, color = if (day) T1Colors.dayMuted else T1Colors.nightMuted, fontSize = 11.sp)
+        Text(label, color = t1CardMuted(day), fontSize = 11.sp)
         Text(value, color = tone(day), fontSize = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }

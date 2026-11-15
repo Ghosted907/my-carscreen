@@ -120,7 +120,9 @@ class JctGestureZones(private val service: AccessibilityService) {
             } else { level = l; invalidate() }
         }
         override fun onDraw(c: Canvas) {
-            if (style == STYLE_HIDDEN && level < 0f) return
+            // 1.15.9: no visible handle at rest (only one floating button on screen). The edge
+            // swipe still works and its feedback shows while the finger is down.
+            if (level < 0f) return
             val vertical = zone.name.startsWith("LEFT") || zone.name.startsWith("RIGHT")
             val progress = level.coerceAtLeast(0f)
             val full = if (vertical) width.toFloat() else height.toFloat()

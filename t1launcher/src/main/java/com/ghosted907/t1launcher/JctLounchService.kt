@@ -55,7 +55,27 @@ object JctOverlay {
 object JctFloatingStyle {
     const val KEY = "floating_style"
     val labels = listOf("أيقونة التطبيق فقط", "دائري", "مربع", "مخفي", "كبسولة")
-    fun selected(context: Context) = JctStore.int(context, KEY, 1).coerceIn(0, labels.lastIndex)
+    /** 1.15.10: styles offered in settings. "مخفي" (3) is gone: the button never disappears. */
+    val choices = listOf(0, 1, 2, 4)
+    /** Default = app icon only (0). A stored "hidden" (3) is shown as app icon only. */
+    fun selected(context: Context) = JctStore.int(context, KEY, 0).coerceIn(0, labels.lastIndex).let { if (it == 3) 0 else it }
+}
+
+/** 1.15.10: floating-button position helpers (default top-right, user can drag it anywhere). */
+object JctFloatingPosition {
+    private const val NAME = "LounchB"
+    private const val MIGRATED = "lounchb_defaults_1_15_10"
+    fun defaultX(context: Context, width: Int) = context.resources.displayMetrics.widthPixels - width - JctOverlay.dp(context, 8)
+    fun defaultY(context: Context) = JctOverlay.dp(context, 80)
+    fun reset(context: Context) = JctStore.p(context).edit().remove(NAME + "X").remove(NAME + "Y").apply()
+    /** One time on 1.15.10: start from the new defaults (top-right, app icon only). Later drags and
+     *  style choices are kept. */
+    fun migrate(context: Context) {
+        val p = JctStore.p(context)
+        if (p.getBoolean(MIGRATED, false)) return
+        p.edit().remove(NAME + "X").remove(NAME + "Y").putInt(JctFloatingStyle.KEY, 0)
+            .putBoolean(MIGRATED, true).apply()
+    }
 }
 
 /**
@@ -63,7 +83,8 @@ object JctFloatingStyle {
  * "<name>X"/"<name>Y" (default screen centre). Long-press 500 ms enters move mode (blinking
  * alpha 0→1→0, 1500 ms, repeat/reverse); a tap without move mode runs [onTap].
  */
-class JctDragWindow(private val context: Context, private val name: String) {
+class JctDragWindow(private val context: Context, private val name: String, private val movable: Boolean = true,
+                    defaultX: Int? = null, defaultY: Int? = null) {
     val params: WindowManager.LayoutParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
         JctOverlay.type(context),
@@ -72,8 +93,9 @@ class JctDragWindow(private val context: Context, private val name: String) {
     ).apply {
         gravity = Gravity.TOP or Gravity.LEFT
         val m = context.resources.displayMetrics
-        x = JctStore.int(context, name + "X", m.widthPixels / 2)
-        y = JctStore.int(context, name + "Y", m.heightPixels / 2)
+        // 1.15.10: keep a saved position on screen (e.g. after a resolution change).
+        x = JctStore.int(context, name + "X", defaultX ?: (m.widthPixels / 2)).coerceIn(0, maxOf(0, m.widthPixels - JctOverlay.dp(context, 48)))
+        y = JctStore.int(context, name + "Y", defaultY ?: (m.heightPixels / 2)).coerceIn(0, maxOf(0, m.heightPixels - JctOverlay.dp(context, 48)))
         title = "JCT_$name"
     }
     private var view: View? = null
@@ -96,7 +118,8 @@ class JctDragWindow(private val context: Context, private val name: String) {
     private val enterMove = Runnable {
         tapAllowed = false
         val v = view ?: return@Runnable
-        blink = ObjectAnimator.ofFloat(v, "alpha", 0f, 1f, 0f).apply {
+        // 1.15.10: blink between 35% and 100% so the button never vanishes while being moved.
+        blink = ObjectAnimator.ofFloat(v, "alpha", .35f, 1f, .35f).apply {
             duration = 1500; repeatCount = -1; repeatMode = ObjectAnimator.REVERSE; start()
         }
     }
@@ -106,7 +129,7 @@ class JctDragWindow(private val context: Context, private val name: String) {
             MotionEvent.ACTION_DOWN -> {
                 tapAllowed = true
                 startX = params.x; startY = params.y; rawX = e.rawX; rawY = e.rawY
-                handler.postDelayed(enterMove, 500)
+                if (movable) handler.postDelayed(enterMove, 500)
             }
             MotionEvent.ACTION_UP -> {
                 if (tapAllowed) onTap()
@@ -156,14 +179,14 @@ class JctMultiButton(context: Context) : FrameLayout(context) {
         minimumWidth = size; minimumHeight = size
         val offsets = listOf(0 to -110, 0 to 110, -110 to 0, 110 to 0, -85 to -85, 85 to -85, -85 to 85, 85 to 85)
         slots.forEachIndexed { i, f ->
-            f.background = circle(Color.parseColor("#E6123827"), Color.parseColor("#D4A84B"))
+            f.background = circle(Color.parseColor("#E6123827"), Color.parseColor("#F4F0E5"))
             f.addView(badges[i], LayoutParams(dp(50), dp(50), Gravity.CENTER))
             f.translationX = dp(offsets[i].first).toFloat(); f.translationY = dp(offsets[i].second).toFloat()
             f.visibility = View.GONE
             addView(f, LayoutParams(dp(90), dp(90), Gravity.CENTER))
         }
         center.setImageResource(R.drawable.ic_t1)
-        center.background = circle(Color.parseColor("#F0071B14"), Color.parseColor("#D4A84B"))
+        center.background = circle(Color.parseColor("#F0071B14"), Color.parseColor("#F4F0E5"))
         val pad = dp(18); center.setPadding(pad, pad, pad, pad)
         addView(center, LayoutParams(dp(100), dp(100), Gravity.CENTER))
         h.postDelayed(dim, 10_000)
@@ -221,12 +244,14 @@ class JctLounchService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         removeAll()
         if (!Settings.canDrawOverlays(this) && !JctOverlay.useA11y(this)) { stopSelf(); return START_NOT_STICKY }
-        val on = JctStore.bool(this, JctStore.LOUNCHB_TRUE, true)
-        val multiOn = JctStore.bool(this, JctStore.MULTI_ON, false)
-        if (!on && !multiOn) { stopSelf(); return START_NOT_STICKY }
+        // 1.15.9: exactly one floating button, always on. The multi-button is retired (old
+        // "sw_multi_button" prefs, set by the v1 migration, are ignored).
+        val on = true
+        val multiOn = false
         if (on) {
             val root = FrameLayout(this)
-            val style = JctFloatingStyle.selected(this)
+            JctFloatingPosition.migrate(this)
+            val style = JctFloatingStyle.selected(this) // 1.15.10: user style again; default app icon only
             // Show the icon of the app the button opens (fallback: T1 logo).
             val action = JctActions.parse(JctStore.str(this, JctStore.LOUNCHB_ACTION, JctActions.NOT_VALUE))
             val appIcon = if (action.type == JctType.APP && action.pkg != null)
@@ -237,10 +262,9 @@ class JctLounchService : Service() {
                     shape = if (style == 1) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
                     cornerRadius = JctOverlay.dp(context, if (style == 4) 50 else 16).toFloat()
                     setColor(Color.parseColor("#F0123827"))
-                    setStroke(JctOverlay.dp(context, 3), Color.parseColor("#D4A84B"))
+                    setStroke(JctOverlay.dp(context, 3), Color.parseColor("#F4F0E5"))
                 }
                 val p = JctOverlay.dp(context, 20); setPadding(p, p, p, p)
-                if (style == 3) alpha = 0f
             }
             val w = JctOverlay.dp(this, if (style == 4) 140 else 100)
             root.addView(img, FrameLayout.LayoutParams(w, JctOverlay.dp(this, 100)))
@@ -249,20 +273,11 @@ class JctLounchService : Service() {
                 img.alpha = 0f; img.scaleX = .6f; img.scaleY = .6f
                 img.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).start()
             }
-            single = JctDragWindow(this, "LounchB").also {
-                val bar = LinearLayout(this).apply {
-                    addView(root)
-                    addView(TextView(this@JctLounchService).apply {
-                        text = "↶"
-                        contentDescription = "رجوع في اللانشر"
-                        gravity = Gravity.CENTER
-                        textSize = 30f
-                        setTextColor(Color.WHITE)
-                        setBackgroundColor(0x55222222)
-                        setOnClickListener { openLauncher("back") }
-                    }, LinearLayout.LayoutParams(JctOverlay.dp(this@JctLounchService, 48), JctOverlay.dp(this@JctLounchService, 48)))
-                }
-                it.attach(bar, JctOverlay.windowManager(this), root) {
+            // 1.15.10: default top-right (below the launcher's top chips); long-press then drag to
+            // move it, and the new spot is saved. No extra "↶" back tab (removed in 1.15.9).
+            single = JctDragWindow(this, "LounchB",
+                defaultX = JctFloatingPosition.defaultX(this, w), defaultY = JctFloatingPosition.defaultY(this)).also {
+                it.attach(root, JctOverlay.windowManager(this), root) {
                     if (action.enumValue in setOf(JctEnum.Not_value, JctEnum.GLOBAL_HOME, JctEnum.GLOBAL_BACK)) openLauncher("home")
                     else JctLaunch.runKey(this, JctStore.LOUNCHB_ACTION)
                 }
@@ -297,8 +312,8 @@ class JctLounchService : Service() {
         /** LounchB.c */
         fun sync(context: Context) {
             val i = Intent(context.applicationContext, JctLounchService::class.java)
-            if (JctStore.bool(context, JctStore.LOUNCHB_TRUE, true) || JctStore.bool(context, JctStore.MULTI_ON, false))
-                runCatching { context.startService(i) } else context.stopService(i)
+            // 1.15.9: the single floating button is always on.
+            runCatching { context.startService(i) }
         }
     }
 }
