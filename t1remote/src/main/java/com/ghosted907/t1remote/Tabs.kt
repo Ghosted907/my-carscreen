@@ -38,10 +38,10 @@ import org.json.JSONObject
 data class AppItem(val pkg: String, val label: String, val screen: String?, val icon: ImageBitmap?,
                    val pinned: Boolean = false, val recent: Int = -1)
 
-private fun op(name: String) = JSONObject().put("op", name)
+internal fun op(name: String) = JSONObject().put("op", name)
 
 /** Parses an app list off the main thread (icon decoding was on the UI thread in 1.2.0). */
-private suspend fun parseApps(data: JSONObject, key: String): List<AppItem> = withContext(Dispatchers.Default) {
+internal suspend fun parseApps(data: JSONObject, key: String): List<AppItem> = withContext(Dispatchers.Default) {
     val a = data.optJSONArray(key) ?: return@withContext emptyList()
     (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let {
         AppItem(it.getString("pkg"), it.optString("label").ifEmpty { it.getString("pkg") }, it.optString("screen").ifEmpty { null },
@@ -50,55 +50,20 @@ private suspend fun parseApps(data: JSONObject, key: String): List<AppItem> = wi
 }
 
 @Composable
+fun NeedsRev4(session: Session, what: String) {
+    if (!session.rev4) Note("$what يحتاج لانشر T1 ‏1.16.0 أو أحدث على السيارة.", Warn)
+}
+
+@Composable
 fun NeedsUpdate(session: Session) {
-    if (!session.rev3) Note("هذه الميزة تحتاج تحديث اللانشر T1 على السيارة لإصدار يدعم T1 Remote 1.3.", Gold)
+    if (!session.rev3) Note("هذه الميزة تحتاج تحديث اللانشر T1 على السيارة لإصدار يدعم T1 Remote 1.3.", Warn)
 }
 
 // ---------------------------------------------------------------- Home
-private val shortcuts = listOf("carplay" to "CarPlay", "youtube" to "YouTube", "waze" to "Waze", "bluetooth" to "البلوتوث", "climate" to "شاشة المكيف")
-private val pages = listOf("home" to "الرئيسية", "apps" to "التطبيقات", "cluster" to "العدادات", "camera" to "كاميرا ٣٦٠",
+internal val shortcuts = listOf("carplay" to "CarPlay", "youtube" to "YouTube/ReVanced", "waze" to "Waze", "bluetooth" to "البلوتوث", "climate" to "شاشة المكيف")
+internal val pages = listOf("home" to "الرئيسية", "apps" to "التطبيقات", "cluster" to "العدادات", "camera" to "كاميرا ٣٦٠",
     "vehicle" to "بيانات السيارة", "controls" to "التحكم", "climate" to "التكييف", "customize" to "التخصيص",
-    "settings" to "الإعدادات", "windows" to "التطبيقات المفتوحة", "permissions" to "الصلاحيات", "installer" to "تثبيت تطبيق")
-
-@Composable
-fun HomeTab(session: Session) {
-    val scope = rememberCoroutineScope()
-    var favourites by remember { mutableStateOf(listOf<AppItem>()) }
-    LaunchedEffect(session.epoch) {
-        session.send(op(RemoteProtocol.OP_APPS), quiet = true) { d -> scope.launch { favourites = parseApps(d, "apps").filter { it.pinned } } }
-    }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        NeedsUpdate(session)
-        Section("اختصارات الرئيسية", "تفتح على شاشة السيارة مثل بطاقات اللانشر. (الواي فاي غير متاح من الجوال.)") {
-            Flow { shortcuts.forEach { (id, label) ->
-                Pill(label, enabled = session.supports(RemoteProtocol.OP_SHORTCUT)) { session.send(op(RemoteProtocol.OP_SHORTCUT).put("id", id)) }
-            } }
-        }
-        if (favourites.isNotEmpty()) Section("المفضلة") {
-            favourites.forEach { app ->
-                AppRow(app) {
-                    Small("الرئيسية") { session.send(op("open").put("pkg", app.pkg).put("screen", "main")) }
-                    if (session.info.optBoolean("cluster")) Small("العدادات") { session.send(op("open").put("pkg", app.pkg).put("screen", "cluster")) }
-                }
-            }
-        }
-        Section("افتح صفحة في اللانشر", "تفتح الصفحة على شاشة السيارة.") {
-            Flow { pages.forEach { (id, label) ->
-                Pill(label, enabled = session.supports(RemoteProtocol.OP_PAGE)) { session.send(op(RemoteProtocol.OP_PAGE).put("page", id)) }
-            } }
-        }
-        Section("الوضع") {
-            val day = session.info.optBoolean("day")
-            Flow {
-                Pill("نهاري", selected = day, enabled = session.supports(RemoteProtocol.OP_SET)) {
-                    session.send(op(RemoteProtocol.OP_SET).put("key", "day").put("value", true)) { session.refreshInfo() } }
-                Pill("ليلي", selected = !day, enabled = session.supports(RemoteProtocol.OP_SET)) {
-                    session.send(op(RemoteProtocol.OP_SET).put("key", "day").put("value", false)) { session.refreshInfo() } }
-                Pill("شاشة داكنة", enabled = session.supports(RemoteProtocol.OP_OEM)) { session.send(op(RemoteProtocol.OP_OEM).put("target", "dark")) }
-            }
-        }
-    }
-}
+    "settings" to "الإعدادات", "windows" to "التطبيقات المعروفة", "permissions" to "الصلاحيات", "installer" to "تثبيت تطبيق")
 
 // ---------------------------------------------------------------- Apps
 @Composable
@@ -137,7 +102,8 @@ fun AppsTab(session: Session) {
             AppRow(app) {
                 Small("الرئيسية") { session.send(op("open").put("pkg", app.pkg).put("screen", "main")) }
                 if (cluster) Small("العدادات") { session.send(op("open").put("pkg", app.pkg).put("screen", "cluster")) }
-                if (session.supports(RemoteProtocol.OP_PIN)) Small(if (app.pinned) "★ إزالة" else "☆ مفضلة") {
+                val full = !app.pinned && apps.count { it.pinned } >= 10
+                if (session.supports(RemoteProtocol.OP_PIN)) Small(if (app.pinned) "★ إزالة" else if (full) "المفضلة ممتلئة (١٠)" else "☆ مفضلة", enabled = !full) {
                     session.send(op(RemoteProtocol.OP_PIN).put("pkg", app.pkg).put("on", !app.pinned)) {
                         apps = apps.map { if (it.pkg == app.pkg) it.copy(pinned = !app.pinned) else it }
                     }
@@ -174,11 +140,19 @@ fun WindowsTab(session: Session) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Note("النوافذ التي يعرفها اللانشر (فتحها هو أو الجوال). أندرويد لا يسمح بقائمة كل التطبيقات المفتوحة.")
-                Small("تحديث") { load() }
+                Text("التطبيقات المعروفة للانشر", color = Accent, fontSize = 18.sp)
+                Note("هذه ليست قائمة التطبيقات المفتوحة: هي التطبيقات التي يعرفها اللانشر (فتحها هو أو الجوال). أندرويد لا يسمح لتطبيق عادي برؤية كل ما يعمل.")
+                Flow {
+                    Small("تحديث") { load() }
+                    // rev 4: the launcher's own buttons (same JctLaunch actions as the floating button), run on the car.
+                    if (session.supportsRun("recent_apps")) Small("التطبيقات الأخيرة على السيارة") { session.send(op(RemoteProtocol.OP_RUN).put("id", "recent_apps")) }
+                    if (session.supportsRun("app_menu")) Small("قائمة التطبيقات على السيارة") { session.send(op(RemoteProtocol.OP_RUN).put("id", "app_menu")) }
+                    if (session.supportsRun("global_back")) Small("رجوع على السيارة") { session.send(op(RemoteProtocol.OP_RUN).put("id", "global_back")) }
+                    if (session.supportsRun("global_home")) Small("الشاشة الرئيسية للسيارة") { session.send(op(RemoteProtocol.OP_RUN).put("id", "global_home")) }
+                }
             }
         }
-        if (tasks.isEmpty()) item { Note("لا توجد نوافذ معروفة بعد.") }
+        if (tasks.isEmpty()) item { Note("لا توجد تطبيقات معروفة للانشر بعد.") }
         items(tasks, key = { it.pkg }) { t ->
             AppRow(t, sub = "على ${screenName(t.screen)}") {
                 Small("قدّمها") { session.send(op("front").put("pkg", t.pkg)) }
@@ -195,6 +169,7 @@ fun WindowsTab(session: Session) {
             }
         }
         if (!info.optBoolean("freeform")) item { Note("تغيير الحجم غير متاح: وضع النوافذ الحرة غير مفعّل في نظام السيارة.") }
+        item { Note("النوافذ الحرة (Waze/YouTube) تظهر على شاشة السيارة فقط ولا تُبث للجوال. تخطيطات التقسيم الثلاثة في الإعدادات.") }
         if (!info.optBoolean("close")) item { Note("إغلاق نافذة تطبيق آخر غير متاح في هذا الإصدار من اللانشر.") }
     }
 }

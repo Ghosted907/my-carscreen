@@ -62,7 +62,6 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
-private fun op(name: String) = JSONObject().put("op", name)
 
 @Composable
 fun ClusterTab(session: Session) {
@@ -85,12 +84,17 @@ private fun ClusterButtons(session: Session) {
     fun cluster(a: String, v: Int = 0) = session.send(op(RemoteProtocol.OP_CLUSTER).put("action", a).put("value", v))
     fun run(id: String) = session.send(op(RemoteProtocol.OP_RUN).put("id", id))
     NeedsUpdate(session)
-    if (!session.info.optBoolean("cluster")) Note("شاشة العدادات غير متاحة الآن.", Gold)
-    Section("مظهر العدادات", "نفس أزرار صفحة العدادات في اللانشر.") {
+    if (!session.info.optBoolean("cluster")) Note("شاشة العدادات غير متاحة الآن.", Warn)
+    // Current theme / font come from the car's readings (rev 4 summary); "غير متاح" when unknown.
+    val live = rememberLive(session, 3000)
+    val theme = live.summary.optInt("theme", 0).takeIf { it > 0 && !live.stale() }
+    val font = live.summary.optInt("font", 0).takeIf { it > 0 && !live.stale() }
+    Section("مظهر العدادات", "نفس أزرار صفحة العدادات في اللانشر، كل زر وظيفة منفصلة.") {
+        Note("الحالي: ${theme?.let { "قالب $it" } ?: "القالب غير متاح"} · ${font?.let { "خط $it" } ?: "الخط غير متاح"}")
         Flow {
             Pill("قالب كلاسيكي", enabled = can) { cluster("classic") }
-            (1..3).forEach { t -> Pill("قالب $t", enabled = can) { cluster("theme", t) } }
-            (1..2).forEach { f -> Pill("خط $f", enabled = can) { cluster("font", f) } }
+            (1..3).forEach { t -> Pill("قالب $t", selected = theme == t, enabled = can) { cluster("theme", t) } }
+            (1..2).forEach { f -> Pill("خط $f", selected = font == f, enabled = can) { cluster("font", f) } }
         }
     }
     Section("نوافذ T1 على العدادات") {
@@ -99,7 +103,8 @@ private fun ClusterButtons(session: Session) {
             Pill("العدادات الأصلية", enabled = can) { cluster("stock") }
             Pill("إغلاق قوي", enabled = can && session.info.optBoolean("close")) { cluster("close_app") }
         }
-        if (!session.info.optBoolean("close")) Note("الإغلاق القوي معطل في هذا الإصدار من اللانشر.")
+        Note("«العدادات الأصلية» تخفي إضافات T1 وتغلق نافذتها، مثل زرّها في اللانشر.")
+        if (!session.info.optBoolean("close")) Note("الإغلاق القوي معطل في اللانشر (ClusterForceClose.ENABLED = false)، ولا يُفعَّل من الجوال.")
     }
     Section("تطبيق العدادات", "التطبيق المختار في الإعدادات (التطبيقات على لوحة العدادات).") {
         Flow {
@@ -108,6 +113,7 @@ private fun ClusterButtons(session: Session) {
             Pill("انقل للشاشة الأخرى", enabled = session.supports(RemoteProtocol.OP_RUN)) { run("cluster_move") }
             Pill("صفحة العدادات على السيارة", enabled = session.supports(RemoteProtocol.OP_PAGE)) { session.send(op(RemoteProtocol.OP_PAGE).put("page", "cluster")) }
         }
+        Note("اختيار التطبيق وتشغيله عند الإقلاع من تبويب الإعدادات ← العدادات.")
     }
 }
 
@@ -203,7 +209,8 @@ private fun BoardEditor(session: Session) {
             val k = w / (BOARD_DP * density)   // board dp -> preview px
             Canvas(Modifier.fillMaxSize().pointerInput(layer, w, h) {
                 if (layer == Layer.Draw) detectDragGestures(onDragStart = { p ->
-                    strokes += Stroke2(drawColor, listOf(Offset((p.x / w).coerceIn(0f, 1f), (p.y / h).coerceIn(0f, 1f))))
+                    // RemoteProtocol.MAX_STROKES: the launcher refuses more, so the phone stops adding instead of failing later.
+                    if (strokes.size < RemoteProtocol.MAX_STROKES) strokes += Stroke2(drawColor, listOf(Offset((p.x / w).coerceIn(0f, 1f), (p.y / h).coerceIn(0f, 1f))))
                 }, onDragEnd = { save(JSONObject().put("strokes", strokesJson())) }) { change, _ ->
                     change.consume()
                     if (strokes.isNotEmpty() && strokes.last().points.size < RemoteProtocol.MAX_POINTS) {
@@ -245,8 +252,8 @@ private fun BoardEditor(session: Session) {
                         val dw = img.width * s; val dh = img.height * s
                         drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset((left + (px - dw) / 2).roundToInt(), (top + (px - dh) / 2).roundToInt()),
                             dstSize = IntSize(dw.roundToInt().coerceAtLeast(1), dh.roundToInt().coerceAtLeast(1)))
-                    } else drawRect(Gold.copy(alpha = .4f), Offset(left, top), Size(px, px))
-                    if (selected) drawRect(Gold, Offset(left, top), Size(px, px), style = Stroke(2f))
+                    } else drawRect(Color(0xFF7FD3A0).copy(alpha = .4f), Offset(left, top), Size(px, px))
+                    if (selected) drawRect(Color(0xFF7FD3A0), Offset(left, top), Size(px, px), style = Stroke(2f))
                 }
                 if (sticker) image(emblem, stickerX, stickerY, stickerSize, layer == Layer.Emblem)
                 if (custom) image(customImage, customX, customY, customSize, layer == Layer.Custom)
@@ -258,7 +265,7 @@ private fun BoardEditor(session: Session) {
                     c.nativeCanvas.drawText(caption, right, top - paint.ascent(), paint)
                     if (layer == Layer.Caption) {
                         val tw = paint.measureText(caption)
-                        drawRect(Gold, Offset(right - tw, top), Size(tw, paint.descent() - paint.ascent()), style = Stroke(2f))
+                        drawRect(Color(0xFF7FD3A0), Offset(right - tw, top), Size(tw, paint.descent() - paint.ascent()), style = Stroke(2f))
                     }
                 }
             }
@@ -290,11 +297,13 @@ private fun BoardEditor(session: Session) {
                     Text("الحجم ${customSize.roundToInt()}", color = Ink)
                     Slider(customSize, { customSize = it }, valueRange = 40f..240f, onValueChangeFinished = { save(JSONObject().put("custom_size", customSize.toDouble())) })
                 }
-                Note("الدوران غير مدعوم في لوحة اللانشر؛ للتدوير استخدم «لوحتي الحرة».")
+                Note("الدوران غير مدعوم في لوحة اللانشر؛ للتدوير استخدم «لوحتي الحرة». صور GIF المتحركة تُرسل كصورة ثابتة (لا حركة).")
             }
             Layer.Draw -> {
                 Text("لون الرسم", color = Ink)
                 ColorRow(drawColor) { drawColor = it; save(JSONObject().put("draw_color", it)) }
+                Note("حتى ${RemoteProtocol.MAX_STROKES} خط و${RemoteProtocol.MAX_POINTS} نقطة لكل خط (${strokes.size} الآن).",
+                    if (strokes.size >= RemoteProtocol.MAX_STROKES) Warn else Muted)
                 Flow {
                     Pill("تراجع", enabled = strokes.isNotEmpty()) { strokes.removeAt(strokes.lastIndex); save(JSONObject().put("strokes", strokesJson())) }
                     Pill("مسح الرسم", enabled = strokes.isNotEmpty()) { strokes.clear(); save(JSONObject().put("strokes_clear", true), msg = true) }
@@ -320,7 +329,7 @@ private fun ColorRow(selected: Int, onPick: (Int) -> Unit) {
     Flow {
         palette.forEach { c ->
             androidx.compose.foundation.layout.Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(Color(c))
-                .border(if (c == selected) 3.dp else 1.dp, if (c == selected) Gold else Color(0xFF2F4A3D), RoundedCornerShape(50))
+                .border(if (c == selected) 3.dp else 1.dp, if (c == selected) Accent else Line, RoundedCornerShape(50))
                 .clickable { onPick(c) })
         }
     }

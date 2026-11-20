@@ -34,6 +34,9 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
     fun ping(): JSONObject = JSONObject().put("rev", RemoteProtocol.REV)
         .put("ops", JSONArray(RemoteProtocol.OPS.toList())).put("climate", true)
         .put("day", app.prefs.day).put("version", versionName())
+        // rev 4 capabilities. No streaming of screens or cameras exists; say so explicitly.
+        .put("offroad", true).put("oem_catalog", true).put("note", true)
+        .put("run_ids", JSONArray(RemoteProtocol.RUN_IDS)).put("stream", false)
 
     private fun versionName(): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
@@ -132,6 +135,15 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
                 val toCluster = JctStore.int(context, JctStore.PKG_AREA, JctStore.AREA_GU) != JctStore.AREA_PRI
                 onMain { JctLaunch.runPkgOn(context, pkg, cluster = toCluster) } ?: false
             }
+            // rev 4: the same JctEnum actions the floating button / edge zones run (JctLaunch.run).
+            in RUN_ENUMS -> {
+                val e = RUN_ENUMS.getValue(id)
+                if (e.name.startsWith("MEDIA") && T1NotificationListener.instance == null)
+                    return RemoteActions.Out(false, "التحكم بالوسائط يحتاج صلاحية قراءة الإشعارات على السيارة")
+                if (e.name.startsWith("GLOBAL") && T1TouchService.instance == null)
+                    return RemoteActions.Out(false, "يحتاج خدمة إمكانية الوصول «T1 remote touch» على السيارة")
+                onMain { JctLaunch.run(context, JctAction(JctType.ENUM, e)); true } ?: false
+            }
             else -> false
         }
         return if (ok) RemoteActions.Out(true, "تم الطلب؛ تحقق من شاشة السيارة")
@@ -196,6 +208,10 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
             .put("floating_styles", JSONArray(JctFloatingStyle.choices.map { "$it:${JctFloatingStyle.labels[it]}" }))
             .put("zone_styles", JSONArray(JctGestureZones.styleLabels))
             .put("wallpaper", c.getSharedPreferences("launcher_wallpaper", Context.MODE_PRIVATE).getString("wallpaper_uri", "").orEmpty().isNotBlank())
+            .put("listener", MediaHub(c).allowed())
+            .put("location", c.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            .put("microphone", c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            .put("close_enabled", ClusterForceClose.ENABLED)
         return RemoteActions.Out(true, "الإعدادات", JSONObject().put("values", v).put("labels", labels).put("info", info))
     }
 
@@ -284,17 +300,19 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
 
     // ---------------- Vehicle data (read-only) ----------------
     fun data(): RemoteActions.Out {
+        app.car.keepReading()
         val snap = app.car.snap
         val list = JSONArray()
-        SignalCatalog.all.forEach { d ->
-            val r = snap.reading(d.key)
-            list.put(JSONObject().put("key", d.key).put("label", d.label).put("group", d.group.label)
-                .put("value", d.format(r.current)).put("unit", d.unit).put("status", r.status.name)
-                .also { o -> r.current?.let { o.put("raw", it) } })
-        }
+        SignalCatalog.all.forEach { d -> list.put(readingJson(d, snap)) }
         val summary = JSONObject().put("car", snap.carOk).put("cluster", snap.clusterOk).put("vehicle", snap.vehicleOk)
             .put("live", snap.liveCount).put("total", SignalCatalog.all.size).put("note", snap.note)
             .put("avm", snap.avmOpen == true)
+            // rev 4: unknown is not "closed"; ages are measured on the car's monotonic clock.
+            .put("avm_state", when (snap.avmOpen) { true -> "open"; false -> "closed"; null -> "unknown" })
+            .put("speed_key", snap.speedKey).put("speed_unit", snap.speedUnit)
+            .put("polling", true)
+        snap.theme?.let { summary.put("theme", it) }
+        snap.font?.let { summary.put("font", it) }
         snap.speed?.let { summary.put("speed", it.toDouble()) }
         snap.gear?.let { summary.put("gear", it) }
         snap.fuel?.let { summary.put("fuel", it) }
@@ -310,6 +328,7 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
     }
 
     fun climateState(): RemoteActions.Out {
+        app.car.keepReading()
         val state = JSONObject()
         Climate.state(app.car.snap).forEach { (k, v) -> state.put(k, v ?: JSONObject.NULL) }
         val specs = JSONObject()
@@ -453,11 +472,124 @@ class RemoteParity(private val context: Context, private val art: RemoteArt) {
         return r.get()
     }
 
-    fun close() { if (probeUsed) probeControl.close() }
+    // ---------------- rev 4: home, note, off-road, OEM catalog ----------------
+    private fun readingJson(d: SignalDefinition, snap: CarBridge.Snap): JSONObject {
+        val r = snap.reading(d.key)
+        return JSONObject().put("key", d.key).put("label", d.label).put("group", d.group.label)
+            .put("value", d.format(r.current)).put("unit", d.unit).put("status", r.status.name)
+            .put("status_label", r.status.label).put("confirmed", d.confirmed).put("src", d.reference)
+            .also { o ->
+                r.current?.let { o.put("raw", it) }
+                r.sampledAtMs?.let { o.put("age_ms", (snap.nowMs - it).coerceAtLeast(0L)) }
+                // A retained old sample is labelled as such, never sent as the current value.
+                if (r.current == null && r.value != null) o.put("last", d.format(r.value))
+                if (r.detail.isNotBlank()) o.put("detail", r.detail)
+            }
+    }
+
+    fun home(): RemoteActions.Out {
+        app.car.keepReading()
+        val apps = AppIndex.launchable(context)
+        fun has(vararg p: String) = AppIndex.find(apps, *p)?.packageName
+        val shortcuts = JSONObject()
+            .put("carplay", JSONObject().put("available", true).put("pkg", has("com.autolink.carplaylink") ?: "")
+                .put("via", if (has("com.autolink.carplaylink") != null) "app" else "interconnection"))
+            .put("youtube", JSONObject().put("available", has("app.revanced.android.youtube", "com.google.android.youtube") != null)
+                .put("pkg", has("app.revanced.android.youtube", "com.google.android.youtube") ?: ""))
+            .put("waze", JSONObject().put("available", has("com.waze") != null).put("pkg", has("com.waze") ?: ""))
+            .put("bluetooth", JSONObject().put("available", true).put("pkg", has("com.autolink.bluetooth") ?: ""))
+            .put("climate", JSONObject().put("available", context.packageManager.getLaunchIntentForPackage("com.autolink.aircontroller") != null)
+                .put("pkg", "com.autolink.aircontroller"))
+        val media = JSONObject().put("allowed", MediaHub(context).allowed())
+        runCatching { T1NotificationListener.instance?.controller() }.getOrNull()?.let { c ->
+            c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)?.let { media.put("title", it) }
+            media.put("playing", c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING)
+        }
+        val d = JSONObject()
+            .put("note", context.getSharedPreferences(NOTE_PREFS, Context.MODE_PRIVATE).getString(NOTE_KEY, "").orEmpty())
+            .put("shortcuts", shortcuts).put("media", media)
+            .put("pinned", JSONArray(app.prefs.pinnedApps)).put("recent", JSONArray(app.prefs.recentApps))
+            .put("dest_cluster", app.prefs.destinationCluster).put("day", app.prefs.day)
+            .put("freeform", HomeAppWindows.freeformEnabled(context))
+        return RemoteActions.Out(true, "الرئيسية", d)
+    }
+
+    /** Same SharedPreferences the launcher's "ملاحظاتي" tile reads and writes. */
+    fun note(text: String): RemoteActions.Out {
+        if (text.length > RemoteProtocol.MAX_NOTE) return RemoteActions.Out(false, "الملاحظة طويلة جداً")
+        val ok = context.getSharedPreferences(NOTE_PREFS, Context.MODE_PRIVATE).edit().putString(NOTE_KEY, text).commit()
+        return if (ok) RemoteActions.Out(true, "حُفظت الملاحظة؛ تظهر في الرئيسية على السيارة عند إعادة فتحها")
+        else RemoteActions.Out(false, "تعذر حفظ الملاحظة")
+    }
+
+    // Off-road sensors run on the car only while a phone keeps asking; they stop 30 s after the last request.
+    private var offroad: OffRoadSensors? = null
+    private val offroadStop = Runnable { offroad?.close(); offroad = null }
+
+    fun offroad(): RemoteActions.Out {
+        val sensors = onMain {
+            main.removeCallbacks(offroadStop)
+            main.postDelayed(offroadStop, 30_000L)
+            offroad ?: OffRoadSensors(context).also { it.start(); offroad = it }
+        } ?: return RemoteActions.Out(false, "تعذر تشغيل حساسات الطرق الوعرة")
+        val now = android.os.SystemClock.elapsedRealtime()
+        fun put(o: JSONObject, key: String, v: OffRoadSensors.Value?, source: String) {
+            val item = JSONObject().put("source", source)
+            val live = v?.live(now)
+            if (v != null) item.put("age_ms", (now - v.at).coerceAtLeast(0L))
+            if (live != null) item.put("value", live) else item.put("status", if (v == null) "UNAVAILABLE" else "STALE")
+            o.put(key, item)
+        }
+        val o = JSONObject()
+        put(o, "pitch", sensors.pitch, "خدمة السيارة IALMisc (ميل طولي)")
+        put(o, "roll", sensors.roll, "خدمة السيارة IALMisc (ميل جانبي)")
+        put(o, "heading", sensors.heading, "حساس الدوران في شاشة السيارة")
+        put(o, "altitude", sensors.altitude, "GPS شاشة السيارة")
+        o.put("location_permission", context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED)
+        o.put("steering", readingJson(SignalCatalog.byKey.getValue("steering"), app.car.snap))
+        return RemoteActions.Out(true, "حساسات الطرق الوعرة", o)
+    }
+
+    /** VehiclePage's OEM catalog (search + 24 per page). With watch=true the page is read (getters only). */
+    fun oemProps(query: String, page: Int, watch: Boolean): RemoteActions.Out {
+        val car = app.car
+        val all = car.oemProperties
+        val q = query.trim()
+        val filtered = if (q.isEmpty()) all else all.filter { it.name.contains(q, true) || it.address.toString().contains(q) }
+        val pages = ((filtered.size + RemoteProtocol.OEM_PAGE - 1) / RemoteProtocol.OEM_PAGE).coerceAtLeast(1)
+        val p = page.coerceIn(0, pages - 1)
+        val shown = filtered.drop(p * RemoteProtocol.OEM_PAGE).take(RemoteProtocol.OEM_PAGE)
+        if (watch) { car.setRemoteProperties(shown); car.keepReading() }
+        val snap = car.snap
+        val list = JSONArray()
+        shown.forEach { prop ->
+            val def = prop.definition()
+            val o = JSONObject().put("address", prop.address).put("name", prop.name).put("type", prop.type)
+                .put("area", prop.area).put("readable", def != null)
+            if (def != null && watch) o.put("reading", readingJson(def, snap))
+            list.put(o)
+        }
+        return RemoteActions.Out(true, "${filtered.size} خاصية", JSONObject().put("items", list).put("page", p)
+            .put("pages", pages).put("total", filtered.size).put("catalog_total", all.size).put("read_only", true))
+    }
+
+    fun close() {
+        if (probeUsed) probeControl.close()
+        main.removeCallbacks(offroadStop)
+        main.post { offroad?.close(); offroad = null }
+    }
 
     companion object {
         const val CUSTOM_FILE = "remote_sticker.png"
         const val WALLPAPER_FILE = "remote_wallpaper.jpg"
+        const val NOTE_PREFS = "home_note"
+        const val NOTE_KEY = "text"
+        /** rev 4 run ids -> the launcher's own JctEnum actions. */
+        val RUN_ENUMS = mapOf(
+            "media_play_pause" to JctEnum.MEDIA_PLAY_PAUSE, "media_next" to JctEnum.MEDIA_NEXT, "media_prev" to JctEnum.MEDIA_BLACK,
+            "recent_apps" to JctEnum.RECENT_TASK_MANAGER, "app_menu" to JctEnum.RUN_START_APP_MENU,
+            "global_home" to JctEnum.GLOBAL_HOME, "global_back" to JctEnum.GLOBAL_BACK)
         /** Same order as the launcher board's font list (index is what is saved). */
         val BOARD_FONT_LABELS = listOf("عربي", "حديث / Modern", "تقليدي / Serif", "يدوي / Handwriting", "أحادي / Mono",
             "القاهرة Cairo", "تجوال Tajawal", "أميري Amiri", "ريم كوفي Reem Kufi", "Lalezar عريض", "Orbitron", "Bebas Neue", "Pacifico")

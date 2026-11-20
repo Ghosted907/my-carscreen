@@ -38,6 +38,10 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
 
     val connected get() = state == State.Connected
     val rev3 get() = ClientRules.supportsRev3(info)
+    val rev4 get() = ClientRules.supportsRev4(info)
+    fun supportsRun(id: String) = connected && ClientRules.supportsRun(info, id)
+    /** Bumped every time a live link drops, so screens can clear pending state (nothing is re-sent). */
+    var drops by mutableIntStateOf(0); private set
     fun supports(op: String) = ClientRules.supports(info, op)
 
     fun say(msg: String, ok: Boolean = true) { status = msg; statusOk = ok }
@@ -105,6 +109,7 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
         if (client !== c) return
         c.close(); client = null
         keepAlive?.cancel()
+        drops++
         say("انقطع الاتصال${reason?.let { ": $it" } ?: ""}", false)
         state = State.Reconnecting
         if (wanted && foreground) { connectJob?.cancel(); connectJob = scope.launch { loop(host, first = false) } }
@@ -116,15 +121,16 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
      * shows the launcher's Arabic message unless [quiet].
      */
     fun send(body: JSONObject, quiet: Boolean = false, timeoutMs: Int = RemoteClient.CALL_TIMEOUT_MS,
-             onError: (String) -> Unit = {}, after: (JSONObject) -> Unit = {}) {
+             onError: (String) -> Unit = {}, onLost: (String) -> Unit = {}, after: (JSONObject) -> Unit = {}) {
         val c = client
         if (c == null || state != State.Connected) { if (!quiet) say("غير متصل بالسيارة", false); onError("غير متصل"); return }
         scope.launch {
             runCatching { c.call(body, timeoutMs) }.onSuccess { r ->
+                if (client !== c) { onError("رد من اتصال سابق"); return@onSuccess }   // never apply a reply from an old link
                 val ok = r.optBoolean("ok")
                 if (!quiet || !ok) say(r.optString("msg"), ok)
                 if (ok) after(r.optJSONObject("data") ?: JSONObject()) else onError(r.optString("msg"))
-            }.onFailure { e -> onError(e.message ?: ""); lost(c, e.message) }
+            }.onFailure { e -> onError(e.message ?: ""); onLost(e.message ?: ""); lost(c, e.message) }
         }
     }
 
@@ -152,6 +158,7 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
     fun onBackground() {
         foreground = false
         val keep = wanted
+        if (client != null) drops++
         connectJob?.cancel(); keepAlive?.cancel()
         dropClient()
         state = State.Idle

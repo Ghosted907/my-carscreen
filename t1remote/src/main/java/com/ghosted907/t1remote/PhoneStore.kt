@@ -30,5 +30,9 @@ class PhoneStore(context: Context) {
     var tab: Int
         get() = p.getInt("tab", 0)
         set(v) = p.edit().putInt("tab", v).apply()
+    /** Phone look only (0 = follow the phone, 1 = day, 2 = night). Independent of the launcher's day/night. */
+    var theme: Int
+        get() = p.getInt("theme", 0)
+        set(v) = p.edit().putInt("theme", v).apply()
     fun forget() = p.edit().remove("last_host").remove("last_host_id").remove("last_name").apply()
 }

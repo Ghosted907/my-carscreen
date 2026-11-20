@@ -127,14 +127,36 @@ class CarBridge(private val context: Context) {
         extra = properties.take(24).mapNotNull { allowed[it.address]?.definition() }.distinctBy { it.key }
     }
 
+    // 1.16.0: the phone's catalog page is read on its own list, so it never replaces the page shown
+    // on the car screen. It expires on its own when the phone stops asking (read-only getters only).
+    @Volatile private var remoteExtra = emptyList<SignalDefinition>()
+    @Volatile private var remoteExtraUntil = 0L
+
+    fun setRemoteProperties(properties: List<OemProperty>, holdMs: Long = 20_000L) {
+        val allowed = oemProperties.associateBy { it.address }
+        remoteExtra = properties.take(24).mapNotNull { allowed[it.address]?.definition() }.distinctBy { it.key }
+        remoteExtraUntil = SystemClock.elapsedRealtime() + holdMs
+    }
+
+    private fun activeExtra(): List<SignalDefinition> {
+        val remote = if (SystemClock.elapsedRealtime() < remoteExtraUntil) remoteExtra else emptyList()
+        return if (remote.isEmpty()) extra else (extra + remote).distinctBy { it.key }
+    }
+
     fun retry() {
         endpoints.filter { !it.ready }.forEach { it.release(); it.retryAt = 0; it.connect() }
         worker.execute { attempted.clear() }
     }
 
+    // 1.16.0: the read-only poll also runs while a phone is reading data (T1 in the background,
+    // e.g. CarPlay full screen); it stops by itself a few seconds after the phone stops asking.
+    @Volatile private var remoteDemandUntil = 0L
+    fun keepReading(forMs: Long = 8_000L) { remoteDemandUntil = SystemClock.elapsedRealtime() + forMs.coerceIn(0L, 15_000L) }
+    private fun remoteReading() = SystemClock.elapsedRealtime() < remoteDemandUntil
+
     private fun poll() {
-        if (onChange == null) return
-        val definitions = (SignalCatalog.all + extra).sortedBy { if (it.key.endsWith("_valid")) 0 else 1 }
+        if (onChange == null && !remoteReading()) return
+        val definitions = (SignalCatalog.all + activeExtra()).sortedBy { if (it.key.endsWith("_valid")) 0 else 1 }
         for (definition in definitions) {
             if (!running) return
             val service = endpoint(definition.source)
@@ -192,7 +214,7 @@ class CarBridge(private val context: Context) {
                 if (it.bound && it.binder == null && now - it.connectedAt > 10000) it.release()
                 it.connect()
             }
-            val readings = store.snapshot(SignalCatalog.all + extra, now)
+            val readings = store.snapshot(SignalCatalog.all + activeExtra(), now)
             fun value(key: String) = readings[key]?.current
             val displaySpeed = TelemetryPresentation.speed(readings)
             val avmMode = value("avm_mode")?.toInt()

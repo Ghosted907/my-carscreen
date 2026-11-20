@@ -103,7 +103,17 @@ object ClientRules {
     fun backoffMs(attempt: Int): Long = (1000L shl attempt.coerceIn(0, 4)).coerceAtMost(15000L)
 
     /** True when the launcher supports protocol revision 3 (the full-parity commands). */
-    fun supportsRev3(ping: JSONObject): Boolean = ping.optInt("rev", 2) >= RemoteProtocol.REV
+    /** Rev 3 = the 1.3 feature set. Compares with 3, not REV, so a rev-3 launcher is not called outdated by a rev-4 phone. */
+    fun supportsRev3(ping: JSONObject): Boolean = ping.optInt("rev", 2) >= RemoteProtocol.REV_3
+    /** Rev 4 = home summary, note sync, offroad, OEM catalog, reading age (launcher 1.16.0). */
+    fun supportsRev4(ping: JSONObject): Boolean = ping.optInt("rev", 2) >= RemoteProtocol.REV_4
+
+    /** A one-shot run id is offered only when the launcher lists it (rev 4 sends run_ids); older launchers get the rev-3 list. */
+    fun supportsRun(ping: JSONObject, id: String): Boolean {
+        val ids = ping.optJSONArray("run_ids")
+            ?: return supportsRev3(ping) && id in RemoteProtocol.RUN_IDS && id !in RemoteProtocol.RUN_IDS_REV4
+        return (0 until ids.length()).any { ids.optString(it) == id }
+    }
 
     fun supports(ping: JSONObject, op: String): Boolean {
         val ops = ping.optJSONArray("ops") ?: return op in LEGACY_OPS

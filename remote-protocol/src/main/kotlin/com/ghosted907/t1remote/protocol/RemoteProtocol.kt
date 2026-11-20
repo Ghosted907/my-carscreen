@@ -36,7 +36,7 @@ object RemoteProtocol {
 
     // Revision 3 (T1 Remote 1.3.0): full launcher parity. VERSION stays 2 so older phones and
     // launchers still talk; a launcher advertises what it supports in ping data ("rev", "ops").
-    const val REV = 3
+    const val REV = 4
     const val OP_SHORTCUT = "shortcut"        // Home cards: CarPlay, YouTube, Waze, Bluetooth, A/C app (no Wi-Fi)
     const val OP_PAGE = "page"                // open a launcher page on the car screen
     const val OP_OEM = "oem"                  // open an OEM / system screen the launcher already opens
@@ -56,9 +56,26 @@ object RemoteProtocol {
     const val OP_PROBE = "vehicle_probe"      // read-only service check
     const val OP_WALLPAPER = "wallpaper"
 
+    // Revision 4 (T1 Remote 1.4.0 / T1 Launcher 1.16.0). All read-only except OP_NOTE (launcher text, no vehicle).
+    // A phone checks "rev" >= REV_4 or the op in "ops" before using any of these.
+    const val REV_3 = 3
+    const val REV_4 = 4
+    const val OP_HOME = "home"                // home summary: saved note, shortcut availability, media title
+    const val OP_NOTE = "note"                // save the home note ("ملاحظاتي"), text only
+    const val OP_OFFROAD = "offroad"          // pitch / roll / heading / altitude measured on the car, with age and source
+    const val OP_OEM_PROPS = "oem_props"      // OEM property catalog search; optional read of one page (never a write)
+
     val OPS = setOf(OP_PING, OP_APPS, OP_TASKS, OP_OPEN, OP_MOVE, OP_FRONT, OP_CLOSE, OP_RESIZE, OP_VEHICLE, OP_ART, OP_ART_CLEAR,
         OP_SHORTCUT, OP_PAGE, OP_OEM, OP_CLUSTER, OP_RUN, OP_ACTIONS, OP_DATA, OP_CLIMATE, OP_CLIMATE_STATE,
-        OP_SETTINGS, OP_SET, OP_PIN, OP_BOARD, OP_BOARD_SET, OP_BOARD_APPLY, OP_ASSET, OP_PROBE, OP_WALLPAPER)
+        OP_SETTINGS, OP_SET, OP_PIN, OP_BOARD, OP_BOARD_SET, OP_BOARD_APPLY, OP_ASSET, OP_PROBE, OP_WALLPAPER,
+        OP_HOME, OP_NOTE, OP_OFFROAD, OP_OEM_PROPS)
+
+    /** Ops a launcher of revision 3 (1.15.x) answers; anything else needs REV_4. */
+    val OPS_REV3 = OPS - setOf(OP_HOME, OP_NOTE, OP_OFFROAD, OP_OEM_PROPS)
+    const val MAX_NOTE = 2000
+    const val MAX_QUERY = 60
+    /** Same page size as the launcher's OEM catalog grid (VehiclePage). */
+    const val OEM_PAGE = 24
 
     /** Home cards. Wi-Fi is deliberately not reachable from the phone. */
     val SHORTCUTS = listOf("carplay", "youtube", "waze", "bluetooth", "climate")
@@ -68,7 +85,11 @@ object RemoteProtocol {
         "devices", "brightness", "overlay", "accessibility", "listener")
     val CLUSTER_ACTIONS = listOf("classic", "hide_addons", "stock", "theme", "font", "close_app")
     val RUN_IDS = listOf("floating_reset", "tasks_test", "black_test", "split_open_1", "split_open_2", "split_open_3",
-        "cluster_open_cluster", "cluster_open_main", "cluster_move")
+        "cluster_open_cluster", "cluster_open_main", "cluster_move",
+        // rev 4: the launcher's own JctEnum actions (same JctLaunch.run the floating button and edge zones call).
+        "media_play_pause", "media_next", "media_prev", "recent_apps", "app_menu", "global_home", "global_back")
+    /** RUN_IDS added in rev 4 (a rev-3 launcher answers "أمر غير معروف"). */
+    val RUN_IDS_REV4 = setOf("media_play_pause", "media_next", "media_prev", "recent_apps", "app_menu", "global_home", "global_back")
     val ASSETS = listOf("emblem")
     const val MAX_IMAGE = 900000
 
@@ -229,7 +250,18 @@ object RemoteProtocol {
         if (op !in OPS) return "أمر غير معروف"
         return when (op) {
             OP_PING, OP_APPS, OP_TASKS, OP_ART_CLEAR, OP_ACTIONS, OP_DATA, OP_CLIMATE_STATE, OP_SETTINGS,
-            OP_BOARD, OP_BOARD_APPLY, OP_PROBE -> null
+            OP_BOARD, OP_BOARD_APPLY, OP_PROBE, OP_HOME, OP_OFFROAD -> null
+            OP_NOTE -> when (val t = body.opt("text")) {
+                !is String -> "الملاحظة غير صالحة"
+                else -> if (t.length > MAX_NOTE) "الملاحظة أطول من $MAX_NOTE حرف" else null
+            }
+            OP_OEM_PROPS -> when {
+                body.has("query") && body.opt("query") !is String -> "البحث غير صالح"
+                body.optString("query").length > MAX_QUERY -> "البحث طويل جداً"
+                body.has("page") && (body.opt("page") !is Number || body.optInt("page", -1) !in 0..1000) -> "رقم الصفحة غير صالح"
+                body.has("watch") && body.opt("watch") !is Boolean -> "قيمة القراءة غير صالحة"
+                else -> null
+            }
             OP_ART -> when {
                 body.optString("image").length !in 1..MAX_IMAGE -> "حجم الصورة غير صالح"
                 !body.optDouble("x").let { it.isFinite() && it in 0.0..1.0 } -> "الموضع غير صالح"

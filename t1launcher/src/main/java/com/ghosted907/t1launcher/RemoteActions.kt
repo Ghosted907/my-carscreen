@@ -64,6 +64,11 @@ class RemoteActions(private val context: Context) {
         RemoteProtocol.OP_ASSET -> more.asset(body.getString("name"))
         RemoteProtocol.OP_PROBE -> more.probe()
         RemoteProtocol.OP_WALLPAPER -> more.wallpaper(body)
+        // rev 4 (launcher 1.16.0)
+        RemoteProtocol.OP_HOME -> more.home()
+        RemoteProtocol.OP_NOTE -> more.note(body.getString("text"))
+        RemoteProtocol.OP_OFFROAD -> more.offroad()
+        RemoteProtocol.OP_OEM_PROPS -> more.oemProps(body.optString("query"), body.optInt("page", 0), body.optBoolean("watch", false))
         RemoteProtocol.OP_APPS -> apps()
         RemoteProtocol.OP_TASKS -> tasks()
         RemoteProtocol.OP_OPEN, RemoteProtocol.OP_MOVE -> open(body.getString("pkg"), body.getString("screen"))
@@ -123,7 +128,8 @@ class RemoteActions(private val context: Context) {
         seen.filterKeys { allowedApp(it) }.forEach { (pkg, screen) ->
             list.put(JSONObject().put("pkg", pkg).put("label", label(pkg)).put("screen", screen).put("icon", icon(pkg)))
         }
-        return Out(true, "${list.length()} نافذة معروفة", JSONObject().put("tasks", list))
+        return Out(true, "${list.length()} تطبيق يعرفه اللانشر", JSONObject().put("tasks", list)
+            .put("note", "قائمة يعرفها اللانشر (فتحها هو أو الجوال أو استُخدمت مؤخراً)، وليست كشفاً مؤكداً بالتطبيقات الجارية"))
     }
 
     private fun open(pkg: String, screen: String): Out {

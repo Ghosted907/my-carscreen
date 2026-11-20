@@ -42,7 +42,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private fun op(name: String) = JSONObject().put("op", name)
 data class ActionChoice(val raw: String, val label: String)
 
 private val zoneNames = mapOf("LEFT_TOP" to "يسار أعلى", "LEFT_BOTTOM" to "يسار أسفل", "RIGHT_TOP" to "يمين أعلى",
@@ -55,7 +54,7 @@ private val langs = listOf("ar" to "العربية", "en" to "English", "system"
  * device-owner provisioning, PIN pairing, system/OEM app changes.
  */
 @Composable
-fun SettingsTab(session: Session, store: PhoneStore) {
+fun SettingsTab(session: Session, store: PhoneStore, theme: Int, setTheme: (Int) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var values by remember { mutableStateOf(JSONObject()) }
@@ -99,7 +98,10 @@ fun SettingsTab(session: Session, store: PhoneStore) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Section("هذا الجوال") {
             SwitchLine("اتصال تلقائي بآخر سيارة", auto) { auto = it; store.autoConnect = it }
-            Note("الاتصال بالبحث التلقائي على نفس الواي فاي، بدون رمز أو اقتران.")
+            Note("الاتصال بالبحث التلقائي على نفس الشبكة، بدون رمز أو اقتران. فتح التطبيق أو إعادة الاتصال لا يرسل أي أمر للسيارة.")
+            Text("مظهر الجوال (مستقل عن نهاري/ليلي اللانشر)", color = Ink)
+            Flow { listOf(0 to "حسب الجوال", 1 to "نهاري", 2 to "ليلي").forEach { (v, l) -> Pill(l, theme == v) { setTheme(v) } } }
+            Note("لغة تطبيق الجوال العربية دائماً ولا تتغير بلغة اللانشر.")
         }
         if (!session.supports(RemoteProtocol.OP_SETTINGS)) { NeedsUpdate(session); return@Column }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,7 +112,7 @@ fun SettingsTab(session: Session, store: PhoneStore) {
         Section("عام") {
             SwitchLine("الوضع النهاري", values.optBoolean("day")) { set("day", it) }
             SwitchLine("الضغط على تطبيق يفتحه على العدادات", values.optBoolean("dest_cluster")) { set("dest_cluster", it) }
-            Text("اللغة (تظهر بعد إعادة فتح T1)", color = Ink)
+            Text("لغة اللانشر على السيارة (لا تغيّر لغة الجوال؛ تظهر بعد إعادة فتح T1)", color = Ink)
             Flow { langs.forEach { (v, l) -> Pill(l, values.optString("language") == v) { set("language", v) } } }
         }
         Section("خلفية اللانشر") {
@@ -167,7 +169,7 @@ fun SettingsTab(session: Session, store: PhoneStore) {
             fun saveTasks(list: List<JSONObject>) = set("tasks", JSONArray(list))
             val list = (0 until tasks.length()).mapNotNull { tasks.optJSONObject(it) }
             list.forEachIndexed { i, t ->
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Bg).padding(8.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Card2).padding(8.dp)) {
                     SwitchLine("${i + 1}. " + (catalog.firstOrNull { it.raw == t.optString("action") }?.label ?: t.optString("action")), t.optBoolean("enabled", true)) { on ->
                         saveTasks(list.mapIndexed { j, o -> if (j == i) JSONObject(o.toString()).put("enabled", on) else o })
                     }
@@ -188,7 +190,7 @@ fun SettingsTab(session: Session, store: PhoneStore) {
             Stepper("عرض المناطق", values.optInt("zone_width", 100), 75, 150, 5, "%") { set("zone_width", it) }
             Stepper("مسافة السحب", values.optInt("zone_sensitivity", 100), 75, 150, 5, "%") { set("zone_sensitivity", it) }
             RemoteProtocol.ZONES.forEach { z ->
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Bg).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Card2).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SwitchLine(zoneNames[z] ?: z, values.optBoolean("zone_on_$z")) { set("zone_on_$z", it) }
                     Flow { zoneStyles.forEachIndexed { i, l -> Pill(l, values.optInt("zone_style_$z", -1) == i) { set("zone_style_$z", i) } } }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -206,6 +208,10 @@ fun SettingsTab(session: Session, store: PhoneStore) {
         }
         Section("الصلاحيات", "تفتح شاشة الصلاحية على السيارة لتفعيلها هناك.") {
             Note("الظهور فوق التطبيقات: ${if (info.optBoolean("overlay")) "مفعّل" else "غير مفعّل"} · خدمة الإيماءات: ${if (info.optBoolean("accessibility")) "تعمل" else "متوقفة"}")
+            if (info.has("listener")) Note("قراءة الإشعارات (أزرار الوسائط): ${if (info.optBoolean("listener")) "مسموحة" else "غير مسموحة"} · " +
+                "الموقع (ارتفاع الطرق الوعرة): ${if (info.optBoolean("location")) "مسموح" else "غير مسموح"} · " +
+                "الميكروفون (صوت اللانشر): ${if (info.optBoolean("microphone")) "مسموح" else "غير مسموح"}")
+            Badge("فتح على شاشة السيارة")
             Flow {
                 Pill("الظهور فوق التطبيقات") { session.send(op(RemoteProtocol.OP_OEM).put("target", "overlay")) }
                 Pill("إمكانية الوصول") { session.send(op(RemoteProtocol.OP_OEM).put("target", "accessibility")) }
@@ -214,7 +220,8 @@ fun SettingsTab(session: Session, store: PhoneStore) {
             }
         }
         Section("غير متاح من الجوال", null) {
-            Note("الواي فاي، إخفاء التطبيقات (يحتاج مالك الجهاز)، تفعيل مالك الجهاز، تعديل تطبيقات النظام، والاقتران برمز. " +
+            Note("الواي فاي، إخفاء التطبيقات (يحتاج مالك الجهاز)، تفعيل مالك الجهاز، الإغلاق القوي، تعديل تطبيقات النظام، الاقتران برمز، " +
+                "بث الشاشة أو الكاميرا للجوال، فتح/إغلاق الباب الخلفي، التحكم بالأنوار، وصوت اللانشر نفسه (الجوال له أمر صوتي اختياري في الرئيسية). " +
                 (if (info.optBoolean("hide_apps")) "إخفاء التطبيقات مفعّل حالياً في اللانشر." else ""))
         }
     }
