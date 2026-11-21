@@ -26,8 +26,8 @@ import java.util.Collections
 import java.util.concurrent.Executors
 
 /**
- * "التحكم من الجوال": off by default. When off, nothing listens and nothing else changes.
- * No pairing: any phone on the same network can connect while it is on.
+ * The local server remains always on for compatibility. Internet control is an opt-in,
+ * authenticated outbound connection managed by CloudHost; LAN discovery stays local.
  */
 object RemoteStore {
     private const val FILE = "t1_remote"
@@ -75,7 +75,7 @@ object RemoteHost {
     }.getOrDefault(emptyList())
 }
 
-/** Small TCP server, alive only while the switch is on. Commands go to RemoteActions. */
+/** Local TCP server and optional cloud connection. Both dispatch through RemoteActions. */
 class RemoteHostService : Service() {
     private var server: ServerSocket? = null
     private val pool = Executors.newFixedThreadPool(5)
@@ -86,17 +86,20 @@ class RemoteHostService : Service() {
     private var bindAttempts = 0
     @Volatile private var destroyed = false
     private lateinit var actions: RemoteActions
+    private lateinit var cloud: CloudHost
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         actions = RemoteActions(applicationContext)
+        cloud = CloudHost(applicationContext, actions)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!RemoteStore.enabled(this)) { stopSelf(); return START_NOT_STICKY }
         foreground()
+        cloud.refresh()
         if (server == null) listen()
         return START_STICKY
     }
@@ -105,7 +108,7 @@ class RemoteHostService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CH) == null) nm.createNotificationChannel(NotificationChannel(CH, "T1 remote", NotificationManager.IMPORTANCE_LOW))
         startForeground(78, Notification.Builder(this, CH).setSmallIcon(R.drawable.ic_stat_t1)
-            .setContentTitle("التحكم من الجوال مفعّل").setContentText("أطفئه من إعدادات T1").build())
+            .setContentTitle("التحكم من الجوال مفعّل").setContentText("الاتصال وإدارة الربط من إعدادات T1").build())
     }
 
     private fun listen() {
@@ -186,6 +189,7 @@ class RemoteHostService : Service() {
 
     override fun onDestroy() {
         destroyed = true
+        cloud.close()
         retry.removeCallbacksAndMessages(null)
         runCatching { nsdListener?.let { nsd?.unregisterService(it) } }
         runCatching { server?.close() }

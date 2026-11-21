@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "release/v*"
 
 permissions:
   contents: write
@@ -13,6 +15,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select the release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' t1launcher/build.gradle.kts | head -n 1)
+          REMOTE_VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' t1remote/build.gradle.kts | head -n 1)
+          TAG="v${VERSION}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "$GITHUB_REF_NAME" = "$TAG"
+          else
+            test "$GITHUB_REF_NAME" = "release/$TAG"
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release $TAG already exists. Bump the version before publishing." >&2
+              exit 1
+            fi
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "REMOTE_VERSION=$REMOTE_VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify relay protocol and workerd sockets
+        run: |
+          npm --prefix relay install --no-audit --no-fund
+          npm --prefix relay test
 
       - uses: actions/setup-java@v4
         with:
@@ -49,6 +80,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          for apk in t1launcher/build/outputs/apk/release/t1launcher-release.apk t1remote/build/outputs/apk/release/t1remote-release.apk; do
+            "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs "$apk" | grep -F '0004470dd1b33264d324ac6fd053ecc0d8837e55edd4de3e8fe1200fed20b642'
+          done
           python3 << 'PY'
           import hashlib, json, os, pathlib, re
           def gradle_version(path):
@@ -72,9 +106,9 @@ jobs:
           remote_sha, remote_size = apk_info(remote_apk)
           base = "https://raw.githubusercontent.com/Ghosted907/my-carscreen/dist"
           manifest = {
-              "tag": os.environ.get("GITHUB_REF_NAME", ""),
+              "tag": os.environ["RELEASE_TAG"],
               "apps": [
-                  {"id": "t1remote", "name": "T1 Remote · تطبيق الجوال", "package": "com.ghosted907.t1remote", "versionCode": remote_code, "versionName": remote_name, "apk": f"{base}/t1remote-release.apk", "sha256": remote_sha, "size": remote_size, "external": False, "postInstall": [], "notes": "يثبت على الجوال. الرسم والكتابة والملصقات والصور على العدادات عبر الشبكة المحلية بدون رمز اقتران."},
+                  {"id": "t1remote", "name": "T1 Remote · تطبيق الجوال", "package": "com.ghosted907.t1remote", "versionCode": remote_code, "versionName": remote_name, "apk": f"{base}/t1remote-release.apk", "sha256": remote_sha, "size": remote_size, "external": False, "postInstall": [], "notes": "يثبت على الجوال. يدعم الاتصال المحلي والربط المشفر عبر الإنترنت برمز خاص من إعدادات اللانشر، حتى لو الجهازان على شبكتين مختلفتين."},
                   {
                       "id": "t1launcher",
                       "name": "T1",
@@ -178,13 +212,18 @@ jobs:
           git config --global user.name "github-actions[bot]"
           WORK=$(mktemp -d)
           cp dist-out/apps.json dist-out/t1launcher-release.apk dist-out/clusterdiag-release.apk dist-out/t1remote-release.apk "$WORK/"
+          cp dist-out/t1launcher-release.apk "$WORK/t1launcher-${RELEASE_TAG}-release.apk"
+          cp dist-out/t1remote-release.apk "$WORK/t1remote-v${REMOTE_VERSION}-release.apk"
           cd "$WORK"
           git init -b dist
           git add apps.json t1launcher-release.apk clusterdiag-release.apk t1remote-release.apk
-          git commit -m "Publish ${GITHUB_REF_NAME} release"
+          git commit -m "Publish ${RELEASE_TAG} release"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dist
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "${RELEASE_TAG}" \
             apps.json t1launcher-release.apk clusterdiag-release.apk t1remote-release.apk \
+            "t1launcher-${RELEASE_TAG}-release.apk" "t1remote-v${REMOTE_VERSION}-release.apk" \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes "Signed release. The browser installer reads https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/apps.json"
+            --target "${GITHUB_SHA}" \
+            --latest \
+            --title "T1 Launcher ${RELEASE_TAG#v} + T1 Remote ${REMOTE_VERSION} — الإصدار الرسمي" \
+            --notes-file "${GITHUB_WORKSPACE}/docs/releases/${RELEASE_TAG}.md"

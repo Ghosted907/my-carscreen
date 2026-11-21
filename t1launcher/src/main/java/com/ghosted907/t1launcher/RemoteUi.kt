@@ -10,6 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.text.selection.SelectionContainer
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +41,10 @@ fun RemoteSettingsCard(day: Boolean) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
     val ips = remember(tick / 5) { RemoteHost.addresses() }
+    var internet by remember { mutableStateOf(CloudStore.enabled(context)) }
+    var showCode by remember { mutableStateOf(false) }
+    var resetCode by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf(if (internet) CloudStore.keys(context).code else "") }
 
     Column(
         Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -42,9 +52,38 @@ fun RemoteSettingsCard(day: Boolean) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("التحكم من الجوال", color = text, fontSize = 20.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("الربط عبر الإنترنت", color = text, fontSize = 17.sp, modifier = Modifier.weight(1f))
+            Switch(checked = internet, onCheckedChange = {
+                internet = it; CloudStore.enable(context, it)
+                if (it) code = CloudStore.keys(context).code
+                else showCode = false
+                RemoteHost.onProcess(context)
+            })
+        }
+        Text(CloudStatus.message, color = muted, fontSize = 14.sp)
+        Text("يربط جوالك بالسيارة حتى لو كل جهاز على شبكة مختلفة. لازم شاشة السيارة تكون شغالة ومتصلة بالإنترنت.", color = muted, fontSize = 13.sp)
+        if (internet) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("T1 Remote", code))
+                }) { Text("نسخ رمز الربط", color = text) }
+                TextButton(onClick = { showCode = !showCode }) { Text(if (showCode) "إخفاء الرمز" else "إظهار الرمز", color = text) }
+                TextButton(onClick = { resetCode = true }) { Text("تغيير الرمز", color = text) }
+            }
+            if (showCode) SelectionContainer { Text(code, color = text, fontSize = 16.sp) }
+            Text("أدخل الرمز في T1 Remote ← اتصال عبر الإنترنت. الرمز يمنح التحكم بسيارتك؛ احتفظ به لنفسك.", color = muted, fontSize = 13.sp)
+        }
+        Text("الاتصال المحلي", color = text, fontSize = 17.sp)
         Text("العنوان: ${ips.joinToString("  ·  ").ifEmpty { "غير متصل بشبكة" }}  منفذ ${RemoteProtocol.PORT}", color = text, fontSize = 15.sp)
         Text("يظهر في تطبيق T1 Remote باسم «${RemoteProtocol.SERVICE_NAME}». أي جوال على نفس الشبكة يقدر يتحكم، فاستخدم هوتسبوت جوالك.", color = muted, fontSize = 13.sp)
         Text("النوافذ والسقف والستارة مسموحة من الجوال دائماً (ضغط مطوّل في التطبيق).", color = text, fontSize = 15.sp)
         Spacer(Modifier.padding(2.dp))
     }
+    if (resetCode) AlertDialog(onDismissRequest = { resetCode = false }, title = { Text("تغيير رمز الربط؟") },
+        text = { Text("ينقطع الربط السابق. أضف الرمز الجديد في جوالك لإعادة الاتصال.") },
+        confirmButton = { TextButton(onClick = {
+            code = CloudStore.reset(context).code; resetCode = false; showCode = false; RemoteHost.onProcess(context)
+        }) { Text("تغيير الرمز") } },
+        dismissButton = { TextButton(onClick = { resetCode = false }) { Text("إلغاء") } })
 }

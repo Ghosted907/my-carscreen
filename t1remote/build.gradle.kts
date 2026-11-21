@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghosted907.t1remote"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.4.0"
+        versionCode = 8
+        versionName = "1.5.0"
     }
 
     val releaseKeystoreB64 = System.getenv("RELEASE_KEYSTORE_BASE64")
@@ -35,6 +35,7 @@ android {
     }
 
     sourceSets["main"].java.srcDir("../remote-protocol/src/main/kotlin")
+    sourceSets["main"].assets.srcDir("../remote-protocol/licenses")
 
     buildFeatures { compose = true }
 
@@ -55,6 +56,9 @@ android {
 }
 
 dependencies {
+    val networkJars = listOf(file("../remote-protocol/libs/okhttp-4.12.0.jar"), file("../remote-protocol/libs/okio-jvm-3.6.0.jar"))
+    if (networkJars.all { it.isFile }) implementation(files(networkJars))
+    else implementation("com.squareup.okhttp3:okhttp:4.12.0")
     val bom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(bom)
     implementation("androidx.compose.ui:ui")

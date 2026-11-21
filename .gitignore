@@ -8,6 +8,10 @@ local.properties
 captures/
 .DS_Store
 node_modules/
+.wrangler/
+.dev.vars
+# Optional, checksum-pinned local copies for offline Android builds.
+remote-protocol/libs/*.jar
 web/dist/
 
 # Secrets and signing material. Never commit these.

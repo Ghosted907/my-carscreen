@@ -9,7 +9,7 @@ object HoldPolicy {
         releasedAt == null && now - pressedAt >= HOLD_MS
 }
 
-/** Phone-side memory: the last launcher used (for auto-reconnect) and a manual address. No keys or PINs. */
+/** Phone-side memory. The cloud pairing secret is private app data and excluded from Android backup. */
 class PhoneStore(context: Context) {
     private val p = context.applicationContext.getSharedPreferences("t1remote", Context.MODE_PRIVATE)
     var lastHost: String
@@ -27,6 +27,13 @@ class PhoneStore(context: Context) {
     var autoConnect: Boolean
         get() = p.getBoolean("auto_connect", true)
         set(v) = p.edit().putBoolean("auto_connect", v).apply()
+    var useCloud: Boolean
+        get() = p.getBoolean("use_cloud", false)
+        set(v) = p.edit().putBoolean("use_cloud", v).apply()
+    var cloudCode: String
+        get() = p.getString("cloud_code", "").orEmpty()
+        set(v) = p.edit().putString("cloud_code", v).apply()
+    fun forgetCloud() = p.edit().remove("cloud_code").putBoolean("use_cloud", false).apply()
     var tab: Int
         get() = p.getInt("tab", 0)
         set(v) = p.edit().putInt("tab", v).apply()

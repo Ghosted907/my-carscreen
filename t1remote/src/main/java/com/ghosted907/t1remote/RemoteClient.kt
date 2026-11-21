@@ -1,6 +1,7 @@
 package com.ghosted907.t1remote
 
 import com.ghosted907.t1remote.protocol.RemoteProtocol
+import com.ghosted907.t1remote.protocol.CloudConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,7 +21,8 @@ import java.nio.charset.StandardCharsets
  * One TCP connection to the launcher. Requests go one at a time; each reply is matched by seq.
  * Any I/O error closes the socket, so a broken connection is never reused (the session reconnects).
  */
-class RemoteClient(val host: String, val port: Int = RemoteProtocol.PORT) {
+class RemoteClient(val host: String, val port: Int = RemoteProtocol.PORT, pair: CloudConfig.Pair? = null) {
+    private val cloud = pair?.let { CloudPhone(it) }
     @Volatile private var socket: Socket? = null
     private var reader: BufferedReader? = null
     private var writer: BufferedWriter? = null
@@ -29,9 +31,10 @@ class RemoteClient(val host: String, val port: Int = RemoteProtocol.PORT) {
     var hello: JSONObject = JSONObject()
         private set
     val hostId: String get() = hello.optString("host")
-    val isOpen: Boolean get() = socket?.let { it.isConnected && !it.isClosed } == true
+    val isOpen: Boolean get() = cloud?.isOpen ?: (socket?.let { it.isConnected && !it.isClosed } == true)
 
     suspend fun connect(): JSONObject = withContext(Dispatchers.IO) {
+        cloud?.let { hello = it.connect(); return@withContext hello }
         val s = Socket()
         try {
             s.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
@@ -54,6 +57,10 @@ class RemoteClient(val host: String, val port: Int = RemoteProtocol.PORT) {
     /** Sends one command and waits for its reply. Throws IOException with an Arabic message on failure. */
     suspend fun call(body: JSONObject, timeoutMs: Int = CALL_TIMEOUT_MS): JSONObject = lock.withLock {
         withContext(Dispatchers.IO) {
+            cloud?.let {
+                try { return@withContext it.call(RemoteProtocol.command(++seq, body), timeoutMs) }
+                catch (e: Exception) { close(); throw IOException(ClientRules.arabic(e), e) }
+            }
             val s = socket ?: throw IOException("غير متصل")
             val w = writer ?: throw IOException("غير متصل")
             val r = reader ?: throw IOException("غير متصل")
@@ -78,6 +85,7 @@ class RemoteClient(val host: String, val port: Int = RemoteProtocol.PORT) {
     }
 
     fun close() {
+        cloud?.close()
         runCatching { socket?.close() }
         socket = null; writer = null; reader = null
     }

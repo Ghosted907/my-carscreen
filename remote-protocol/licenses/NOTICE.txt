@@ -1,0 +1,17 @@
+Pinned, unmodified network dependencies used by both Android applications:
+
+OkHttp 4.12.0 - Copyright Square, Inc. and contributors.
+https://github.com/square/okhttp
+https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/4.12.0/
+SHA-256: b1050081b14bb7a3a7e55a4d3ef01b5dcfabc453b4573a4fc019767191d5f4e0
+
+Okio JVM 3.6.0 - Copyright Square, Inc. and contributors.
+https://github.com/square/okio
+https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.6.0/
+SHA-256: 67543f0736fc422ae927ed0e504b98bc5e269fda0d3500579337cb713da28412
+
+Both are distributed under the Apache License, Version 2.0 (LICENSE-2.0.txt).
+Optional local copies support offline Android builds; JARs are not committed.
+Without both local JARs, Gradle resolves these same versions from Maven Central.
+Kotlin standard library is supplied by the project's existing Kotlin plugin.
+OkHttp's bundled public-suffix NOTICE remains inside the original JAR.

@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.ghosted907.t1remote.protocol.CloudConfig
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -164,8 +166,18 @@ private fun RemoteApp(store: PhoneStore, theme: Int, setTheme: (Int) -> Unit) {
 private fun ConnectScreen(session: Session, store: PhoneStore, found: List<Discovery.Found>, problem: String) {
     var manual by remember { mutableStateOf(store.manualHost) }
     var auto by remember { mutableStateOf(store.autoConnect) }
+    var cloudCode by remember { mutableStateOf(store.cloudCode) }
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Note("خلّ الجوال والسيارة على نفس الواي فاي (مثلاً هوتسبوت الجوال). اللانشر يظهر هنا تلقائياً، بدون رمز أو اقتران.")
+        Section("اتصال عبر الإنترنت", "شغّل الربط عبر الإنترنت من إعدادات اللانشر، ثم انسخ رمز الربط هنا. الجوال والسيارة يقدرون يكونون على شبكتين مختلفتين.") {
+            OutlinedTextField(cloudCode, { cloudCode = it.trim().take(80) }, singleLine = true,
+                label = { Text("رمز الربط من السيارة") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            Small("اتصل عبر الإنترنت", enabled = CloudConfig.pair(cloudCode) != null) { session.connectCloud(cloudCode) }
+            if (store.cloudCode.isNotEmpty()) Small("نسيت هذا الربط") {
+                session.disconnect(); store.forgetCloud(); cloudCode = ""; session.say("تم حذف رمز الربط من الجوال")
+            }
+            Note("تحتاج شاشة السيارة تكون شغالة ومتصلة بالإنترنت. الأوامر لا تُحفظ ولا يُعاد إرسالها بعد الانقطاع.")
+        }
+        Note("للاتصال المحلي فقط: خلّ الجوال والسيارة على نفس الواي فاي. يظهر اللانشر تلقائياً تحت اللانشرات القريبة.")
         Section("اللانشرات القريبة") {
             if (found.isEmpty()) Note(problem.ifEmpty { "جاري البحث… تأكد أن T1 يعمل على السيارة وأن الجوال على نفس الشبكة." })
             found.forEach { f ->

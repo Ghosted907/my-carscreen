@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ghosted907.t1remote.protocol.RemoteProtocol
+import com.ghosted907.t1remote.protocol.CloudConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +31,9 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
     var epoch by mutableIntStateOf(0); private set
 
     private var client: RemoteClient? = null
+    private var connecting: RemoteClient? = null
+    private var generation = 0
+    var cloudMode by mutableStateOf(store.useCloud); private set
     private var connectJob: Job? = null
     private var keepAlive: Job? = null
     private var wanted = false
@@ -48,6 +52,18 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
 
     fun connect(target: String, label: String = "") {
         if (!ClientRules.validHost(target)) { say("العنوان غير صالح", false); return }
+        store.useCloud = false; cloudMode = false
+        begin(target, label)
+    }
+
+    fun connectCloud(code: String = store.cloudCode) {
+        val pair = CloudConfig.pair(code)
+        if (pair == null) { say("رمز الربط غير صالح؛ انسخه من إعدادات اللانشر", false); return }
+        store.cloudCode = pair.code; store.useCloud = true; cloudMode = true
+        begin("عبر الإنترنت", "T1")
+    }
+
+    private fun begin(target: String, label: String) {
         wanted = true
         userStopped = false
         host = target
@@ -58,20 +74,27 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
     }
 
     private suspend fun loop(target: String, first: Boolean) {
+        val lease = generation
         var attempt = 0
         var initial = first
-        while (scope.isActive && wanted && foreground) {
+        while (scope.isActive && wanted && foreground && lease == generation) {
             state = if (initial) State.Connecting else State.Reconnecting
             say(if (initial) "جاري الاتصال بـ $target …" else "إعادة الاتصال بـ $target (محاولة ${attempt + 1}) …")
-            val c = RemoteClient(target)
+            val pair = if (cloudMode) CloudConfig.pair(store.cloudCode) else null
+            if (cloudMode && pair == null) { state = State.Idle; say("أضف رمز الربط من السيارة", false); return }
+            val c = RemoteClient(target, pair = pair)
+            connecting = c
             val ok = runCatching { c.connect() }
+            if (lease != generation || !foreground || !wanted) { c.close(); return }
+            connecting = null
             if (ok.isSuccess) {
                 client = c
                 val h = ok.getOrThrow()
                 name = h.optString("name").ifEmpty { name }
-                store.lastHost = target; store.lastHostId = c.hostId; store.lastName = name
+                if (!cloudMode) { store.lastHost = target; store.lastHostId = c.hostId; store.lastName = name }
                 val ping = runCatching { c.call(JSONObject().put("op", RemoteProtocol.OP_PING)) }.getOrNull()
-                if (ping == null || client !== c) { c.close(); client = null }
+                if (lease != generation || client !== c || !foreground || !wanted) { c.close(); return }
+                if (ping == null) { c.close(); client = null }
                 else {
                     info = ping.optJSONObject("data") ?: JSONObject()
                     state = State.Connected
@@ -145,13 +168,15 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
         say(msg)
     }
 
-    private fun dropClient() { client?.close(); client = null; keepAlive?.cancel() }
+    private fun dropClient() { generation++; connecting?.close(); connecting = null; client?.close(); client = null; keepAlive?.cancel() }
 
     /** App visible again: reconnect to the last launcher if the user did not disconnect. */
     fun onForeground() {
         foreground = true
-        if (state == State.Idle && store.autoConnect && store.lastHost.isNotEmpty() && !userStopped)
-            connect(store.lastHost, store.lastName)
+        if (state == State.Idle && store.autoConnect && !userStopped) {
+            if (store.useCloud && CloudConfig.pair(store.cloudCode) != null) connectCloud()
+            else if (store.lastHost.isNotEmpty()) connect(store.lastHost, store.lastName)
+        }
     }
 
     /** App in background: free the socket so nothing leaks; [onForeground] restores it. */
@@ -167,6 +192,7 @@ class Session(private val scope: CoroutineScope, private val store: PhoneStore) 
 
     /** A launcher found by discovery: reconnect automatically if it is the one used last time. */
     fun onFound(list: List<Discovery.Found>) {
+        if (store.useCloud) return
         if (state == State.Connected || state == State.Connecting) return
         if (!store.autoConnect || userStopped || !foreground) return
         val last = store.lastHost

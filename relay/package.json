@@ -1,0 +1,7 @@
+{
+  "name": "t1-remote-relay",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "node --test relay.test.mjs runtime.test.cjs" },
+  "devDependencies": { "miniflare": "5.20261119.0-beta" }
+}

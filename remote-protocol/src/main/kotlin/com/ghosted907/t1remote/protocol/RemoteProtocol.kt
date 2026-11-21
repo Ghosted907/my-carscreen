@@ -6,8 +6,8 @@ import org.json.JSONObject
  * Wire protocol shared by the T1 launcher (server) and the T1 Remote phone app (client).
  * Pure JVM code (org.json only) so it is unit-tested without Android.
  *
- * Transport: TCP on the same Wi-Fi, one UTF-8 JSON object per line. No pairing or keys:
- * anyone on the same network can send commands while the launcher's switch is on.
+ * Local transport: TCP on the same Wi-Fi, one UTF-8 JSON object per line, without pairing.
+ * Internet transport: authenticated WSS relay with separate host/phone keys and expiring commands.
  *  server -> {"t":"hello","v":1,"name":..,"host":<launcher id>}
  *  client -> {"t":"cmd","seq":n,"body":{"op":..}}
  *  server -> {"t":"res","seq":n,"ok":bool,"msg":..,"data":{..}}
